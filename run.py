@@ -1,10 +1,7 @@
 # ---ros init---
 from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
-
 import rospy
-import numpy as np
 
 rospy.init_node('gesture', anonymous=True)
 pub_right = rospy.Publisher('/hand_position_right', PoseStamped, queue_size=10)
@@ -17,7 +14,8 @@ pub_boarders = rospy.Publisher('/hands_boarder', String, queue_size=10)
 data_out_boarders = 'No intersect'
 
 pub_parameters = rospy.Publisher('/hands_parameters', String, queue_size=10)
-data_out_parameters = np.zeros(4)
+data_out_parameters = []
+
 rate = rospy.Rate(10)  # 10hz
 parameters_points_1 = [1, 0]
 parameters_points_2 = [1, 0]
@@ -264,10 +262,10 @@ def get_hand_parameter_1(points):
 
 def get_hand_parameter_2(points):
     x1, y1 = points[8][0], points[8][1]
-    x2, y2 = points[20][0], points[20][1]
+    x2, y2 = points[12][0], points[12][1]
     x_c1, y_c1 = (x1 + x2) / 2, (y1 + y2) / 2
     x1, y1 = points[5][0], points[5][1]
-    x2, y2 = points[17][0], points[17][1]
+    x2, y2 = points[9][0], points[9][1]
     x_c2, y_c2 = (x1 + x2) / 2, (y1 + y2) / 2
     dy = y_c1 - y_c2
     dx = x_c1 - x_c2
@@ -276,7 +274,6 @@ def get_hand_parameter_2(points):
     if (degs < 0):
         degs += 90
     return degs
-
 
 
 cord_recorded = []
@@ -309,13 +306,13 @@ while True:
                 intersection = detect_intersection(rectangular_points_hand1, rectangular_points_hand2)
                 pub_boarders.publish(intersection)
 
-                # for point in points2:
-                #     x, y = point
-                #     cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
-                # for connection in connections:
-                #     x0, y0 = points2[connection[0]]
-                #     x1, y1 = points2[connection[1]]
-                #     cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
+                for point in points2:
+                    x, y = point
+                    cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
+                for connection in connections:
+                    x0, y0 = points2[connection[0]]
+                    x1, y1 = points2[connection[1]]
+                    cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
 
                 sign_coords2 = points2.flatten() / float(frame.shape[0]) - 0.5
                 sign_class2 = sign_classifier.predict(np.expand_dims(sign_coords2, axis=0))
@@ -329,15 +326,13 @@ while True:
 
                 if gesture_ml2 == 5:
                     param_r_1 = get_hand_parameter_1(points2)
-                    #param_r_2 = 0
-                    param_r_2 = get_hand_parameter_2(points2)
-
+                    param_r_2 = 0
                     parameters_points_2[0] = param_r_1
                     parameters_points_2[1] = param_r_2
 
-                # if gesture_ml2 == 2:
-                #     param_r_2 = get_hand_parameter_2(points2)
-                #     parameters_points_2[1] = param_r_2
+                if gesture_ml2 == 2:
+                    param_r_2 = get_hand_parameter_2(points2)
+                    parameters_points_2[1] = param_r_2
                 # gesture2, gesture_number2 = gesture_recognition(points2)
 
     # ---Draw lines---
@@ -350,13 +345,13 @@ while True:
     if points is not None:
         hand = right_or_left(points)
 
-        # for point in points:
-        #     x, y = point
-        #     cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
-        # for connection in connections:
-        #     x0, y0 = points[connection[0]]
-        #     x1, y1 = points[connection[1]]
-        #     cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
+        for point in points:
+            x, y = point
+            cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
+        for connection in connections:
+            x0, y0 = points[connection[0]]
+            x1, y1 = points[connection[1]]
+            cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
 
         sign_coords = points.flatten() / float(frame.shape[0]) - 0.5
         sign_class = sign_classifier.predict(np.expand_dims(sign_coords, axis=0))
@@ -371,52 +366,50 @@ while True:
 
         if gesture_ml == 5:
             param_r_1 = get_hand_parameter_1(points)
-            # param_r_2 = 0
-            param_r_2 = get_hand_parameter_2(points)
+            param_r_2 = 0
             parameters_points_1[0] = param_r_1
             parameters_points_1[1] = param_r_2
-        #
-        # if gesture_ml == 2:
-        #     param_r_2 = get_hand_parameter_2(points)
-        #     parameters_points_1[1] = param_r_2
+
+        if gesture_ml == 2:
+            param_r_2 = get_hand_parameter_2(points)
+            parameters_points_1[1] = param_r_2
 
         # print(parameters_points_1, parameters_points_2)
         gesture_ml = int(SIGNS_dict[sign_text])
         # gesture, gesture_number = gesture_recognition(points)
 
-    data_out_parameters = np.zeros(4)
-
     if two_hands_detection:
         if points is not None:
             if hand == 'left':
                 publish_hand_left(position, gesture_ml)
-                data_out_parameters[0] = parameters_points_1[0]
-                data_out_parameters[1] = parameters_points_1[1]
+                data_out_parameters.append(parameters_points_1)
                 if points2 is not None:
-                    data_out_parameters[2] = parameters_points_2[0]
-                    data_out_parameters[3] = parameters_points_2[1]
+                    data_out_parameters.append(parameters_points_2)
                     if hand2 == 'right':
                         publish_hand_right(position2, gesture_ml2)
+                if points2 is None:
+                    data_out_parameters.append([1, 0])
 
             if hand == 'right':
                 publish_hand_right(position, gesture_ml)
-                data_out_parameters[2] = parameters_points_1[0]
-                data_out_parameters[3] = parameters_points_1[1]
+                data_out_parameters.append(parameters_points_2)
                 if points2 is not None:
-                    data_out_parameters[0] = parameters_points_2[0]
-                    data_out_parameters[1] = parameters_points_2[1]
+                    data_out_parameters.append(parameters_points_1)
                     if hand2 == 'left':
                         publish_hand_left(position2, gesture_ml2)
+                if points2 is None:
+                    data_out_parameters.append([1, 0])
+
     else:
         if points is not None:
             if hand == 'left':
                 publish_hand_left(position, gesture_ml)
-                data_out_parameters[0] = parameters_points_1[0]
-                data_out_parameters[1] = parameters_points_1[1]
+                data_out_parameters.append(parameters_points_1)
+                data_out_parameters.append([1, 0])
             if hand == 'right':
                 publish_hand_right(position, gesture_ml)
-                data_out_parameters[2] = parameters_points_1[0]
-                data_out_parameters[3] = parameters_points_1[1]
+                data_out_parameters.append(parameters_points_1)
+                data_out_parameters.append([1, 0])
 
         # ---record lines from gesture---
         if draw_line:
@@ -432,8 +425,7 @@ while True:
         # ------
 
     # frameBig = cv2.resize(frame, (1200, 900))
-    #print(data_out_parameters)
-    pub_parameters.publish(str(data_out_parameters))
+    print(data_out_parameters)
     cv2.imshow(WINDOW, frame)
 
     key = cv2.waitKey(1)
