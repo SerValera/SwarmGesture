@@ -38,6 +38,8 @@ pub_for_drawing = rospy.Publisher('/drone_drawing', String, queue_size=10)
 
 pub_add_hand = rospy.Publisher('add_hand', String, queue_size=10)
 
+pub_gesture = rospy.Publisher('/gesture_number', String, queue_size=10)
+
 rate = rospy.Rate(10)  # 4hz
 
 n_drones = 5
@@ -46,6 +48,7 @@ running_size = 5
 x_start = (-0.5, 0.5, 0.5, -0.5, 0)
 y_start = (0.5, 0.5, -0.5, -0.5, 0)
 z_start = (0, 0, 0, 0, 0)
+
 
 class SendPositionNode(object):
     def __init__(self):
@@ -142,22 +145,29 @@ class SendPositionNode(object):
         if self.status == 'LAND':
             self.end_coordinates = []
             for i in range(self.n_drones):
-                self.end_coordinates.append([x_start[i], y_start[i], z_start[i]+1])
+                self.end_coordinates.append([x_start[i], y_start[i], z_start[i] + 1])
             if self.current_coordinates[0][2] == self.end_coordinates[0][2]:
                 self.status = 'BEGIN'
 
         if self.status == 'MODE: 1':
             self.end_coordinates = []
             if self.gesture_number_right == 5:
-                l = (self.hand_r_param_l - 0.5) * 0.5
-
+                l = (self.hand_r_param_l * 0.5) * 0.5
                 a = self.delta_a
+                print(a)
 
                 pi = math.pi
 
-                x = (-l * math.cos(pi/4 + a*pi/180), l * math.cos(pi/4 - a*pi/180), l * math.cos(pi/4 + a*pi/180), -l, 0)
-                y = (l * math.sin(pi/4 + a*pi/180), l * math.sin(pi/4 - a*pi/180), -l * math.cos(pi/4 + a*pi/180), -l, 0)
+                x = (-l * math.cos(pi / 4 + a * pi / 180), l * math.cos(pi / 4 - a * pi / 180),
+                     l * math.cos(pi / 4 + a * pi / 180), -l * math.cos(pi / 4 - a * pi / 180), 0)
+                y = (l * math.sin(pi / 4 + a * pi / 180), l * math.sin(pi / 4 - a * pi / 180),
+                     -l * math.sin(pi / 4 + a * pi / 180), -l * math.sin(pi / 4 - a * pi / 180), 0)
                 z = (0, 0, 0, 0, 0)
+
+                # x = (-l, l, l, -l, 0)
+                # y = (l, l, -l, -l, 0)
+                # z = (0, 0, 0, 0, 0)
+
                 for i in range(self.n_drones):
                     self.end_coordinates.append(
                         [self.pos_r[0] + x[i], self.pos_r[1] + y[i], self.pos_r[2] + z[i]])
@@ -173,7 +183,7 @@ class SendPositionNode(object):
                 for i in range(self.n_drones):
                     self.end_coordinates.append(
                         [self.pos_r[0] + x[i], self.pos_r[1] + y[i], self.pos_r[2] + z[i]])
-            #print('end_coordinates', self.end_coordinates)
+            # print('end_coordinates', self.end_coordinates)
 
     def move_to_end(self, msg):
         # ---function to move drones from CURRENT to END positions---
@@ -266,13 +276,13 @@ class SendPositionNode(object):
                 self.current_coordinates[i] = current_point[i]
 
         # print(self.current_coordinates - ends)
-        #self.current_coordinates = current_point
+        # self.current_coordinates = current_point
 
     def subscriber_gesture(self):
         rospy.Subscriber('/hand_position_right', PoseStamped, self.callback_hand_right)
         rospy.Subscriber('/hand_position_left', PoseStamped, self.callback_hand_left)
         rospy.Subscriber('/hands_boarder', String, self.callback_hands_boarder)
-        # rospy.Subscriber('/letter_drone', String, self.resent)
+        rospy.Subscriber('/letter_drone', String, self.resent)
         rospy.Subscriber('/hands_parameters', String, self.get_hand_parameters)
 
     def resent(self, msg):
@@ -314,9 +324,9 @@ class SendPositionNode(object):
         # print(self.pos_r, self.pos_l)
         # self.plot_coordinates()
 
-        #---transform angle of the hand. Gesture 5---
-        self.delta_a += int(self.hand_r_param_a / 15) * 0.75
-        print(self.delta_a)
+        # ---transform angle of the hand. Gesture 5---
+        self.delta_a += int(self.hand_r_param_a / 20) * 1.5
+        # print(self.delta_a)
 
     def plot_coordinates(self):
         x_vals = []
@@ -345,16 +355,16 @@ class SendPositionNode(object):
         if self.gesture_number_left == 5:
             self.hand_l_param_l = float(hand_parameters[0])
             self.hand_l_param_a = float(hand_parameters[1])
+        # print(self.hand_r_param_l, self.hand_r_param_a)
 
-
-        #print(int(self.hand_r_param_a/15), self.delta_a)
+        # print(int(self.hand_r_param_a/15), self.delta_a)
         # print(hand_parameters)
 
     def subscriber_clock(self):
         # ---subscriper for trajectory generation--
         rospy.Subscriber('/test_clock_py', String, self.coordinates_processsing)
-        rospy.Subscriber('/test_clock_py', String, self.gesture_system_control)
-        # rospy.Subscriber('/test_clock_py', String, self.gesture_system_control_land_take_off)
+        #rospy.Subscriber('/test_clock_py', String, self.gesture_system_control)
+        rospy.Subscriber('/test_clock_py', String, self.gesture_system_control_land_take_off)
         rospy.Subscriber('/test_clock_py', String, self.prepare_data_out_and_publish)
 
         if self.end_coordinates != []:
@@ -383,19 +393,23 @@ class SendPositionNode(object):
             # print(self.collected_gesture, average, rounding, identical)
             print(self.count, 'previous:', self.previous_gesture_right, ', current:', current_gesture_right)
 
+
             if (self.status != 'BEGIN') and (self.previous_gesture_right == 5) and (current_gesture_right == 8):
                 self.status = 'BEGIN'
                 print('LAND ALL')
 
+
             if (self.status == 'BEGIN') and (self.previous_gesture_right == 1) and (current_gesture_right == 6):
                 print('From begin to TAKE OFF')
                 self.status = 'TAKE OFF'
+
 
             # ---END FLIGHT---
             if (self.status == 'IN FLIGHT. MAIN') and (self.previous_gesture_right == 5) and (
                     current_gesture_right == 6):
                 self.status = 'LAND'
                 print('LAND')
+                pub_gesture.publish('land')
 
             # ---CHOOSE MODE 1. CHANGE FORMS OF SWARM---
             if (self.status == 'IN FLIGHT. MAIN') and (self.previous_gesture_right == 5) and (
@@ -403,31 +417,31 @@ class SendPositionNode(object):
                 print('MODE 1: CHANGE FORMS OF SWARM')
                 self.status = 'MODE: 1'
 
-            # ---CHOOSE MODE 2. TWO HAND CONTROL---
-            if (self.status == 'IN FLIGHT. MAIN') and (self.previous_gesture_right == 5) and (
-                    current_gesture_right == 2):
-                print('MODE 2: SPLIT/MERGE SWAMRS')
-                self.status = 'TWO HAND CONTROL, ONE SWARM'
-
-            # ---MODE 2. SPLIT, MAKE TWO SWARMS---
-            if (self.status == 'TWO HAND CONTROL, ONE SWARM') and (self.intersection == 'Intersect') and (
-                    self.previous_gesture_right == 5) and (
-                    (current_gesture_right == 1) or (current_gesture_right == 2) or (current_gesture_right == 3)):
-                self.status = 'TWO HAND CONTROL, TWO SWARM'
-                print(
-                    'swarm splited,' + str(current_gesture_left) + ' drones, ' + str(current_gesture_right) + ' drones')
-
-            # ---MODE 2. MERGE, RETURN TO ONE SWARM---
-            if (self.status == 'TWO HAND CONTROL, TWO SWARM') and (self.intersection == 'Intersect') and (
-                    self.previous_gesture_right == 5) and (current_gesture_right == 6) and (current_gesture_left == 6):
-                self.status = 'TWO HAND CONTROL, ONE SWARM'
-                print('swarm merged')
-
-            # ---CHOOSE MODE 2. RETURN TO THE MAIN MENU---
-            if (self.status == 'TWO HAND CONTROL, ONE SWARM') and (self.previous_gesture_right == 5) and (
-                    current_gesture_right == 6):
-                print('RETURN TO THE MAIN MENU')
-                self.status = 'IN FLIGHT. MAIN'
+            # # ---CHOOSE MODE 2. TWO HAND CONTROL---
+            # if (self.status == 'IN FLIGHT. MAIN') and (self.previous_gesture_right == 5) and (
+            #         current_gesture_right == 2):
+            #     print('MODE 2: SPLIT/MERGE SWAMRS')
+            #     self.status = 'TWO HAND CONTROL, ONE SWARM'
+            #
+            # # ---MODE 2. SPLIT, MAKE TWO SWARMS---
+            # if (self.status == 'TWO HAND CONTROL, ONE SWARM') and (self.intersection == 'Intersect') and (
+            #         self.previous_gesture_right == 5) and (
+            #         (current_gesture_right == 1) or (current_gesture_right == 2) or (current_gesture_right == 3)):
+            #     self.status = 'TWO HAND CONTROL, TWO SWARM'
+            #     print(
+            #         'swarm splited,' + str(current_gesture_left) + ' drones, ' + str(current_gesture_right) + ' drones')
+            #
+            # # ---MODE 2. MERGE, RETURN TO ONE SWARM---
+            # if (self.status == 'TWO HAND CONTROL, TWO SWARM') and (self.intersection == 'Intersect') and (
+            #         self.previous_gesture_right == 5) and (current_gesture_right == 6) and (current_gesture_left == 6):
+            #     self.status = 'TWO HAND CONTROL, ONE SWARM'
+            #     print('swarm merged')
+            #
+            # # ---CHOOSE MODE 2. RETURN TO THE MAIN MENU---
+            # if (self.status == 'TWO HAND CONTROL, ONE SWARM') and (self.previous_gesture_right == 5) and (
+            #         current_gesture_right == 6):
+            #     print('RETURN TO THE MAIN MENU')
+            #     self.status = 'IN FLIGHT. MAIN'
 
             # ---MODE 1---
             if (self.status == 'MODE: 1') and (self.previous_gesture_right == 5) and (current_gesture_right == 1):
@@ -468,13 +482,15 @@ class SendPositionNode(object):
             # print(self.collected_gesture, average, rounding, identical)
             print(self.count, 'previous:', self.previous_gesture_right, ', current:', current_gesture_right)
 
-            if (self.status == 'BEGIN') and (self.previous_gesture_right == 1) and (current_gesture_right == 8):
+            if (self.status == 'BEGIN') and (self.previous_gesture_right == 2) and (current_gesture_right == 8):
                 self.status = 'TAKE OFF'
-                print(self.status)
+                #print(self.status)
                 pub_for_drawing.publish('takeoff')
                 time.sleep(2)
 
-            if (self.status == 'TAKE OFF') and (self.previous_gesture_right == 5) and (current_gesture_right == 8):
+                self.status = 'MODE: 1'
+
+            if (self.status == 'MODE: 1') and (self.previous_gesture_right == 5) and (current_gesture_right == 8):
                 self.status = 'BEGIN'
                 print("LAND ALL")
                 pub_for_drawing.publish('land')
