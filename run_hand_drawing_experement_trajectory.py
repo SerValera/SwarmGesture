@@ -11,6 +11,8 @@ from geometry_msgs.msg import PoseStamped
 import rospy
 from std_msgs.msg import String
 
+from scipy import interpolate
+
 # from PIL import ImageFont, ImageDraw, Image
 
 rospy.init_node('gesture', anonymous=True)
@@ -28,10 +30,14 @@ import matplotlib.pyplot as plt
 
 draw_line = True
 
+import csv
 import math
 from math import ceil
+import statistics
 import time
 from collections import deque
+
+from sklearn.metrics import mean_squared_error
 
 running_size = 5
 collected_gesture = deque([0])
@@ -64,8 +70,10 @@ letters_rus_psevdo = {1: 'a', 2: 'b', 3: 'v', 4: 'g', 5: 'a', 6: 'e', 7: 'j', 8:
                       20: 'y', 21: 'f', 22: 'x', 23: 'ch', 24: 'ch', 25: 'sh', 26: 'sh', 27: 'b', 28: 'n', 29: 'b',
                       30: 'ee', 31: 'u', 32: 'ya'}
 
-thickness_draw_line = 3
-thickness_record_line = 3
+thickness_draw_line = 5
+thickness_record_line = 5
+
+traj_number = 1
 
 # variebles for get position
 img_center_x = 250
@@ -284,28 +292,51 @@ def predicting():
 
 def make_trajecotry(number):
     true_traj = []
-    if number == 1:
-        n_inter = 25
-        key_points = ((120, 100), (400, 100), (400, 350), (120, 350))
 
+    # --square--
+    if number == 1:
+        n_inter = 20
+        key_points = ((120, 100), (400, 100), (400, 350), (120, 350))
         for i in range(len(key_points) - 1):
             x = np.linspace(key_points[i][0], key_points[i + 1][0], num=n_inter, endpoint=True)
             y = np.linspace(key_points[i][1], key_points[i + 1][1], num=n_inter, endpoint=True)
-
             for j in range(len(x)):
                 true_traj.append((x[j], y[j]))
-
         x = np.linspace(key_points[len(key_points) - 1][0], key_points[0][0], num=n_inter, endpoint=True)
         y = np.linspace(key_points[len(key_points) - 1][1], key_points[0][1], num=n_inter, endpoint=True)
-
         for j in range(len(x)):
             true_traj.append((x[j], y[j]))
 
-        # ---show trajectory by cv---
-        # img_traj_1 = np.zeros((height, width, 3), np.uint8)  # make the background white
-        # for i in range(len(true_traj)):
-        #     cv2.circle(img_traj_1, (int(true_traj[i][0]), int(true_traj[i][1])), radius=0, color=(255, 0, 0), thickness=-1)
-        # cv2.imshow("Test traj 1", img_traj_1)
+    # --circle--
+    if number == 2:
+        n_inter = 100
+        center = (320, 230)
+        r = 100
+        dtheta = 2 * math.pi / n_inter
+        theta = 0
+        for n in range(n_inter):
+            theta += dtheta
+            x = r * math.cos(theta) + center[0]
+            y = r * math.sin(theta) + center[1]
+            true_traj.append((x, y))
+
+    # --square--
+    if number == 3:
+        n_inter = 40
+        key_points = ((310, 120), (470, 320), (180, 320))
+        for i in range(len(key_points) - 1):
+            x = np.linspace(key_points[i][0], key_points[i + 1][0], num=n_inter, endpoint=True)
+            y = np.linspace(key_points[i][1], key_points[i + 1][1], num=n_inter, endpoint=True)
+            for j in range(len(x)):
+                true_traj.append((x[j], y[j]))
+        x = np.linspace(key_points[len(key_points) - 1][0], key_points[0][0], num=n_inter, endpoint=True)
+        y = np.linspace(key_points[len(key_points) - 1][1], key_points[0][1], num=n_inter, endpoint=True)
+        for j in range(len(x)):
+            true_traj.append((x[j], y[j]))
+
+    with open('trajectories/true_traj_' + str(number) + '.csv', 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(true_traj)
 
     return true_traj
 
@@ -319,7 +350,7 @@ def draw_trajectory(true_traj, frame, color_p):
 
 def exp_mean(traj_recorded):
     n = len(traj_recorded)
-    print(np.array(traj_recorded))
+    # print(np.array(traj_recorded))
     traj_recorded = np.array(traj_recorded)
     exp_mean_x = []
     exp_mean_y = []
@@ -328,9 +359,9 @@ def exp_mean(traj_recorded):
         exp_mean_x.append(traj_recorded[i][0])
         exp_mean_y.append(traj_recorded[i][1])
 
-    print(exp_mean_x, exp_mean_y)
+    # print(exp_mean_x, exp_mean_y)
 
-    coeff = 0.5
+    coeff = 0.7
     for i in range(1, n):
         exp_mean_x[i] = exp_mean_x[i - 1] + coeff * (traj_recorded[i][0] - exp_mean_x[i - 1])
         exp_mean_y[i] = exp_mean_y[i - 1] + coeff * (traj_recorded[i][1] - exp_mean_y[i - 1])
@@ -341,41 +372,126 @@ def exp_mean(traj_recorded):
     return exp_mean
 
 
-def draw_trajectory_line(traj_recorded_mean, img_trajectory, color_l):
+def draw_trajectory_line(traj_recorded_mean, img_trajectory, color_l, thickness):
     for i in range(len(traj_recorded_mean) - 1):
         img_trajectory = cv2.line(img_trajectory, (int(traj_recorded_mean[i][0]), int(traj_recorded_mean[i][1])),
                                   (int(traj_recorded_mean[i + 1][0]),
                                    int(traj_recorded_mean[i + 1][1])), color=color_l,
-                                  thickness=1)
+                                  thickness=thickness)
     return img_trajectory
 
 
+def compare_traj_same_shape(true_traj, target_traj):
+    def get_dist(p1, p2):
+        return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
+
+    error_dist = []
+    for i in range(len(true_traj)):
+        dist = get_dist(target_traj[i], true_traj[i])
+        error_dist.append(dist)
+
+    print('---- error in pixels ----')
+    print('mean error (px):', statistics.mean(error_dist))
+    print('median (px):', statistics.median(error_dist))
+    print('max (px):', max(error_dist))
+    print('min (px):', min(error_dist))
+
+
 def compare_traj(true_traj, target_traj):
+    def get_dist(p1, p2):
+        return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
+
+    error_dist = []
+    for i in range(len(target_traj)):
+        min_dist = [0, 1000]
+        for j in range((len(true_traj))):
+            dist = get_dist(target_traj[i], true_traj[j])
+            if dist < min_dist[1]:
+                min_dist[1] = dist
+                min_dist[0] = j
+        error_dist.append(min_dist[1])
+
+    print('---- error in pixels ----')
+    print('mean error (px):', statistics.mean(error_dist))
+    print('median (px):', statistics.median(error_dist))
+    print('max (px):', max(error_dist))
+    print('min (px):', min(error_dist))
     return
 
 
-def interpolate_traj(traj):
-    number_of_point = 100
-    traj_int = []
+def interpolate_traj(traj, true_traj):
+    def interpcurve(N, pX, pY):
+        # equally spaced in arclength
+        N = np.transpose(np.linspace(0, 1, N))
 
-    t_o = np.linspace(0, 1, ceil(number_of_point))
-    t = []
-    traj_x_int = []
-    traj_y_int = []
+        # how many points will be uniformly interpolated?
+        nt = N.size
 
-    t = np.linspace(0, 1, len(traj))
-    # print(t.shape, len(traj[:]))
+        # number of points on the curve
+        n = pX.size
+        pxy = np.array((pX, pY)).T
+        p1 = pxy[0, :]
+        pend = pxy[-1, :]
+        last_segment = np.linalg.norm(np.subtract(p1, pend))
+        epsilon = 10 * np.finfo(float).eps
 
-    traj = np.array(traj)
+        # IF the two end points are not close enough lets close the curve
+        if last_segment > epsilon * np.linalg.norm(np.amax(abs(pxy), axis=0)):
+            pxy = np.vstack((pxy, p1))
+            nt = nt + 1
+        else:
+            print('Contour already closed')
 
-    traj_x_int.append(np.interp(t_o, t, traj[:, 0]))
-    traj_y_int.append(np.interp(t_o, t, traj[:, 1]))
+        pt = np.zeros((nt, 2))
 
-    for i in range(ceil(number_of_point)):
-        traj_int.append((traj_x_int[0][i], traj_y_int[0][i]))
+        # Compute the chordal arclength of each segment.
+        chordlen = (np.sum(np.diff(pxy, axis=0) ** 2, axis=1)) ** (1 / 2)
+        # Normalize the arclengths to a unit total
+        chordlen = chordlen / np.sum(chordlen)
+        # cumulative arclength
+        cumarc = np.append(0, np.cumsum(chordlen))
+
+        tbins = np.digitize(N, cumarc)  # bin index in which each N is in
+
+        # catch any problems at the ends
+        tbins[np.where(tbins <= 0 | (N <= 0))] = 1
+        tbins[np.where(tbins >= n | (N >= 1))] = n - 1
+
+        s = np.divide((N - cumarc[tbins]), chordlen[tbins - 1])
+        pt = pxy[tbins, :] + np.multiply((pxy[tbins, :] - pxy[tbins - 1, :]), (np.vstack([s] * 2)).T)
+        return pt
+
+    N = len(true_traj)
+    x, y = [], []
+    for i in range(len(traj)):
+        x.append(traj[i][0])
+        y.append(traj[i][1])
+    x = np.array(x)
+    y = np.array(y)
+
+    traj_int = interpcurve(N, x, y)
 
     return traj_int
 
+
+def get_hand_parameter_2(points):
+    x1, y1 = points[8][0], points[8][1]
+    x2, y2 = points[12][0], points[12][1]
+    x_c1, y_c1 = (x1 + x2) / 2, (y1 + y2) / 2
+    x1, y1 = points[5][0], points[5][1]
+    x2, y2 = points[9][0], points[9][1]
+    x_c2, y_c2 = (x1 + x2) / 2, (y1 + y2) / 2
+    dy = y_c1 - y_c2
+    dx = x_c1 - x_c2
+    rads = math.atan2(dy, dx)
+    degs = math.degrees(rads)
+    if (degs < 0):
+        degs += 90
+    return degs
+
+
+time_measure = False
+start = 0
 
 cord_recorded = []
 lines_recorded = []
@@ -392,7 +508,8 @@ while True:
     image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     height, width = image.shape[0], image.shape[1]
 
-    true_traj = make_trajecotry(1)
+    # ---choose trajectory---
+    true_traj = make_trajecotry(traj_number)
 
     points, _ = detector(image)
     # ---Draw lines---
@@ -471,56 +588,83 @@ while True:
         if draw_line:
             if gesture_ml == 1:
                 cord_recorded.append(points[8])
+                time_measure = True
+
             if gesture_ml == 5:
+                if time_measure == False:
+                    d_time = 0
+                    start = time.time()
+                    time.clock()
+
                 if len(cord_recorded) != 0:
                     lines_recorded.append(cord_recorded)
                     cord_recorded = []
 
             if gesture_ml == 6:
+                end_time = time.time()
+                d_time = end_time - start
+                time_measure = False
                 if lines_recorded != []:
                     img_trajectory = np.zeros((height, width, 3), np.uint8)  # make the background white
+                    img_trajectory_2 = np.zeros((height, width, 3), np.uint8)  # make the background white
+
                     for i in range(len(lines_recorded)):
                         for j in range(len(lines_recorded[i]) - 1):
                             traj_recorded.append((width - int(lines_recorded[i][j][0]), int(lines_recorded[i][j][1])))
 
-
                     # ---SHOW TRAJECTORIES---
                     # linear intropolation of the traj
-                    traj_recorded_int = interpolate_traj(traj_recorded)
+                    traj_recorded_int = interpolate_traj(traj_recorded, true_traj)
 
                     # smooth data traj
-                    traj_recorded_mean = exp_mean(traj_recorded)
-                    traj_recorded_int_mean = exp_mean(traj_recorded_int)
-
-                    # ---flip---
-                    img_trajectory = cv2.flip(img_trajectory, 1)
+                    #traj_recorded_mean = exp_mean(traj_recorded)
+                    #traj_recorded_int_mean = exp_mean(traj_recorded_int)
 
                     # ---show images---
                     # -draw true traj-
-                    img_trajectory = draw_trajectory(true_traj, img_trajectory, (255, 255, 255))
+                    #img_trajectory = draw_trajectory_line(true_traj, img_trajectory, (255, 255, 255))
+                    img_trajectory = draw_trajectory_line(true_traj, img_trajectory, (255, 255, 255), 1)
 
                     # -draw recorded-
-                    # img_trajectory = draw_trajectory(traj_recorded, img_trajectory, (0, 0, 255))
-                    # img_trajectory = draw_trajectory_line(traj_recorded, img_trajectory, (255, 0, 255))
+                    #img_trajectory = draw_trajectory(traj_recorded, img_trajectory, (0, 255, 0))
+                    img_trajectory = draw_trajectory_line(traj_recorded, img_trajectory, (255, 255, 0), 1)
 
                     # -draw smooth recorded-
-                    img_trajectory = draw_trajectory(traj_recorded_mean, img_trajectory, (255, 0, 255))
-                    img_trajectory = draw_trajectory_line(traj_recorded_mean, img_trajectory, (255, 0, 255))
+                    # img_trajectory = draw_trajectory(traj_recorded_mean, img_trajectory, (255, 0, 255))
+                    # img_trajectory = draw_trajectory_line(traj_recorded_mean, img_trajectory, (255, 0, 255))
 
-                    # -draw smooth interpolate-
-                    # img_trajectory = draw_trajectory(traj_recorded_int_mean, img_trajectory, (255, 0, 255))
-                    # img_trajectory = draw_trajectory_line(traj_recorded_int_mean, img_trajectory, (255, 0, 255))
+                    # -draw interpolate-
+                    img_trajectory = draw_trajectory(traj_recorded_int, img_trajectory, (255, 0, 255))
+                    #img_trajectory = draw_trajectory_line(traj_recorded_int, img_trajectory, (0, 255, 255), 1)
+
 
                     # draw lines
-
                     # img_trajectory = draw_trajectory(traj_recorded_int, img_trajectory, (255, 0, 255))
 
                     # print(true_traj)
                     # print(traj_recorded)
 
-                    cv2.imshow('Draw trajectory', img_trajectory)
                     # --- END SHOW TRAJECTORIES---
 
+                    # ---INTRAPOLATE TRAJ---
+                    #new_traj = my_intapolation(traj_recorded, 100)
+                    #img_trajectory = draw_trajectory(new_traj, img_trajectory, (255, 255, 0))
+
+                    cv2.imshow('Draw trajectory', img_trajectory)
+                    #cv2.imshow('Trajectory 2', img_trajectory_2)
+
+                    # ---COMPARE TRAJECTORIES---
+                    # print('delta time (sec):', d_time)
+                    # # compare_traj(true_traj, traj_recorded_mean)
+                    # compare_traj_same_shape(true_traj, traj_recorded_int_mean)
+                    # # print('number of points:', len(traj_recorded_int_mean), len(true_traj))
+                    # print('MSE:', mean_squared_error(true_traj, traj_recorded_int_mean))
+
+                    # ---SAVE TRAJECTORIES---
+                    # todo: make csv file, save trajectories
+                    with open('trajectories/draw_traj_' + str(traj_number) + '.csv', 'a') as f:
+                        thewriter = csv.writer(f)
+                        thewriter.writerow(traj_recorded_int)
 
                 cord_recorded = []
                 lines_recorded = []

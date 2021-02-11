@@ -16,6 +16,8 @@ data_out_boarders = 'No intersect'
 pub_parameters = rospy.Publisher('/hands_parameters', String, queue_size=10)
 data_out_parameters = []
 
+
+
 rate = rospy.Rate(10)  # 10hz
 parameters_points_1 = [1, 0]
 parameters_points_2 = [1, 0]
@@ -366,7 +368,7 @@ while True:
 
         if gesture_ml == 5:
             param_r_1 = get_hand_parameter_1(points)
-            param_r_2 = 0
+            param_r_2 = get_hand_parameter_2(points)
             parameters_points_1[0] = param_r_1
             parameters_points_1[1] = param_r_2
 
@@ -408,8 +410,8 @@ while True:
                 data_out_parameters.append([1, 0])
             if hand == 'right':
                 publish_hand_right(position, gesture_ml)
-                data_out_parameters.append(parameters_points_1)
                 data_out_parameters.append([1, 0])
+                data_out_parameters.append(parameters_points_1)
 
         # ---record lines from gesture---
         if draw_line:
@@ -426,6 +428,7 @@ while True:
 
     # frameBig = cv2.resize(frame, (1200, 900))
     print(data_out_parameters)
+    pub_parameters.publish(str(data_out_parameters))
     cv2.imshow(WINDOW, frame)
 
     key = cv2.waitKey(1)

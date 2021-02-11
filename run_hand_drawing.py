@@ -62,8 +62,8 @@ letters_rus_psevdo = { 1: 'a', 2: 'b', 3: 'v', 4: 'g', 5: 'a', 6: 'e', 7: 'j', 8
 10: 'i', 11: 'k', 12: 'l', 13: 'm', 14: 'n', 15: 'o', 16: 'p', 17: 'r', 18: 's', 19: 't',
 20: 'y', 21: 'f', 22: 'x', 23: 'ch', 24: 'ch', 25: 'sh', 26: 'sh', 27: 'b', 28: 'n', 29: 'b', 30: 'ee', 31: 'u', 32: 'ya'}
 
-thickness_draw_line = 35
-thickness_record_line = 35
+thickness_draw_line = 30
+thickness_record_line = 30
 
 #variebles for get position
 img_center_x = 250
@@ -250,8 +250,8 @@ def letter_detection(img_letter):
     print(recorded_letters)
     cv2.putText(thresh1, letters_rus_psevdo[result], (40,80), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
 
-    for i in range(len(recorded_letters)):
-        cv2.putText(thresh1, recorded_letters[i], (40 + i*25, 440), cv2.FONT_HERSHEY_SIMPLEX, 1, 255)
+    # for i in range(len(recorded_letters)):
+    #     cv2.putText(thresh1, recorded_letters[i], (40 + i*25, 440), cv2.FONT_HERSHEY_SIMPLEX, 1, 255)
 
     frameBig = cv2.resize(thresh1, (1024, 768))
     cv2.imshow(WINDOW_letter, thresh1)
@@ -322,13 +322,16 @@ while True:
         draw_lines()
 
     if points is not None:
-        for point in points:
-            x, y = point
-            cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
-        for connection in connections:
-            x0, y0 = points[connection[0]]
-            x1, y1 = points[connection[1]]
-            cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
+        # for point in points:
+        #     x, y = points
+        #     cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
+        # for connection in connections:
+        #     x0, y0 = points[connection[0]]
+        #     x1, y1 = points[connection[1]]
+        #     cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
+
+        cv2.circle(frame, (int(points[8][0]), int(points[8][1])), THICKNESS * 2, POINT_COLOR, THICKNESS)
+
 
         sign_coords = points.flatten() / float(frame.shape[0]) - 0.5
         sign_class = sign_classifier.predict(np.expand_dims(sign_coords, axis=0))
