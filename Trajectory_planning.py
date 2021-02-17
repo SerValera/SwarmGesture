@@ -124,19 +124,13 @@ class SendPositionNode(object):
         self.gesture_position_left = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
 
     def get_end_poses(self):
-        def sin(a):
-            return (math.sin(self.hand_r_param_l + a))
-
-        def cos(a):
-            return (math.cos(self.hand_r_param_l + a))
-
-        self.end_coordinates = []
-
         if self.status == 'BEGIN':
+            self.end_coordinates = []
             for i in range(self.n_drones):
                 self.end_coordinates.append([x_start[i], y_start[i], z_start[i]])
 
         if self.status == 'TAKE OFF':
+            self.end_coordinates = []
             for i in range(self.n_drones):
                 self.end_coordinates.append([x_start[i], y_start[i], z_start[i] + 1])
             if self.current_coordinates[0][2] == self.end_coordinates[0][2]:
@@ -149,12 +143,15 @@ class SendPositionNode(object):
             if self.current_coordinates[0][2] == self.end_coordinates[0][2]:
                 self.status = 'BEGIN'
 
-        if self.status == 'MODE: 1':
+        if self.status == 'IN FLIGHT. MAIN':
             self.end_coordinates = []
+            for i in range(self.n_drones):
+                self.end_coordinates.append([x_start[i], y_start[i], z_start[i] + 1])
+
+        if self.status == 'MODE: 1':
             if self.gesture_number_right == 5:
                 l = (self.hand_r_param_l * 0.5) * 0.5
                 a = self.delta_a
-                print(a)
 
                 pi = math.pi
 
@@ -168,21 +165,17 @@ class SendPositionNode(object):
                 # y = (l, l, -l, -l, 0)
                 # z = (0, 0, 0, 0, 0)
 
-                for i in range(self.n_drones):
-                    self.end_coordinates.append(
-                        [self.pos_r[0] + x[i], self.pos_r[1] + y[i], self.pos_r[2] + z[i]])
-
             else:
                 pi = math.pi
                 l = (self.hand_r_param_l - 0.5) * 0.5
-
                 x = (-l, l, l, -l, 0)
                 y = (l, l, -l, -l, 0)
                 z = (0, 0, 0, 0, 0)
 
-                for i in range(self.n_drones):
-                    self.end_coordinates.append(
-                        [self.pos_r[0] + x[i], self.pos_r[1] + y[i], self.pos_r[2] + z[i]])
+            self.end_coordinates = []
+            for i in range(self.n_drones):
+                self.end_coordinates.append(
+                    [self.pos_r[0] + x[i], self.pos_r[1] + y[i], self.pos_r[2] + z[i]])
             # print('end_coordinates', self.end_coordinates)
 
     def move_to_end(self, msg):
@@ -328,24 +321,6 @@ class SendPositionNode(object):
         self.delta_a += int(self.hand_r_param_a / 20) * 1.5
         # print(self.delta_a)
 
-    def plot_coordinates(self):
-        x_vals = []
-        y_vals = []
-
-        index = count()
-
-        def animate(i):
-            x_vals.append(next(index))
-            y_vals.append(self.pos_r[0])
-
-            plt.cla()
-            plt.plot(x_vals, y_vals)
-
-        ani = animation.FuncAnimation(plt.gcf(), animate, interval=20)
-
-        plt.tight_layout()
-        plt.show()
-
     def get_hand_parameters(self, msg):
         data = msg.data
         hand_parameters = re.findall(r"[-+]?\d*\.\d+|\d+", data)
@@ -363,8 +338,8 @@ class SendPositionNode(object):
     def subscriber_clock(self):
         # ---subscriper for trajectory generation--
         rospy.Subscriber('/test_clock_py', String, self.coordinates_processsing)
-        #rospy.Subscriber('/test_clock_py', String, self.gesture_system_control)
-        rospy.Subscriber('/test_clock_py', String, self.gesture_system_control_land_take_off)
+        rospy.Subscriber('/test_clock_py', String, self.gesture_system_control)
+        # rospy.Subscriber('/test_clock_py', String, self.gesture_system_control_land_take_off)
         rospy.Subscriber('/test_clock_py', String, self.prepare_data_out_and_publish)
 
         if self.end_coordinates != []:
@@ -393,16 +368,13 @@ class SendPositionNode(object):
             # print(self.collected_gesture, average, rounding, identical)
             print(self.count, 'previous:', self.previous_gesture_right, ', current:', current_gesture_right)
 
-
             if (self.status != 'BEGIN') and (self.previous_gesture_right == 5) and (current_gesture_right == 8):
                 self.status = 'BEGIN'
                 print('LAND ALL')
 
-
             if (self.status == 'BEGIN') and (self.previous_gesture_right == 1) and (current_gesture_right == 6):
                 print('From begin to TAKE OFF')
                 self.status = 'TAKE OFF'
-
 
             # ---END FLIGHT---
             if (self.status == 'IN FLIGHT. MAIN') and (self.previous_gesture_right == 5) and (
@@ -484,7 +456,7 @@ class SendPositionNode(object):
 
             if (self.status == 'BEGIN') and (self.previous_gesture_right == 2) and (current_gesture_right == 8):
                 self.status = 'TAKE OFF'
-                #print(self.status)
+                # print(self.status)
                 pub_for_drawing.publish('takeoff')
                 time.sleep(2)
 
