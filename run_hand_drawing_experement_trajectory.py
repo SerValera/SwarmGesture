@@ -2,6 +2,11 @@
 # -*- coding: utf-8 -*-
 # -*- coding: cp1251 -*-
 
+
+traj_number = 3
+n_participant = 3
+
+
 import math
 import time
 from collections import deque
@@ -73,7 +78,8 @@ letters_rus_psevdo = {1: 'a', 2: 'b', 3: 'v', 4: 'g', 5: 'a', 6: 'e', 7: 'j', 8:
 thickness_draw_line = 5
 thickness_record_line = 5
 
-traj_number = 1
+
+
 
 # variebles for get position
 img_center_x = 250
@@ -94,8 +100,8 @@ PALM_MODEL_PATH = "models/palm_detection_without_custom_op.tflite"
 LANDMARK_MODEL_PATH = "models/hand_landmark.tflite"
 ANCHORS_PATH = "models/anchors.csv"
 
-sign_classifier = load_model('models/model1.h5')
-SIGNS = ['one', 'two', 'three', 'four', 'five', 'ok', 'rock', 'thumbs_up']
+sign_classifier = load_model('models/model2.h5')
+SIGNS = ['one', 'two', 'three', 'four', 'five', 'ok', 'rock', 'thumbs_up', 'thumbs_down', 'close']
 SIGNS_dict = {
     'one': 1,
     'two': 2,
@@ -104,7 +110,9 @@ SIGNS_dict = {
     'five': 5,
     'ok': 6,
     'rock': 7,
-    'thumbs_up': 8
+    'thumbs_up': 8,
+    'thumbs_down': 9,
+    'close': 10
 }
 
 POINT_COLOR = (0, 255, 0)
@@ -250,6 +258,49 @@ def draw_lines():
                                                                                        int(cord_recorded[i + 1][1])),
                          (0, 255, 0), thickness=thickness_draw_line)
 
+    if posList != []:
+        if len(posList) > 1:
+            for i in range(len(posList) - 1):
+                cv2.line(frame, (640 - int(posList[i][0]), int(posList[i][1])), (640 - int(posList[i + 1][0]),
+                                                                                 int(posList[i + 1][1])),
+                         (255, 255, 0), thickness=thickness_draw_line)
+
+
+def onMouse(event, x, y, flags, param):
+    global start_mouse
+    global posList
+    global start
+
+    if event == cv2.EVENT_LBUTTONDOWN and start_mouse == False:
+        start_mouse = True
+        d_time = 0
+        start = time.time()
+        time.clock()
+        print(start_mouse)
+
+    if event == cv2.EVENT_LBUTTONUP and start_mouse == True:
+        start_mouse = False
+        end_time = time.time()
+        d_time = end_time - start
+        print(start_mouse)
+        # ---SAVE TRAJECTORIES---
+        with open('trajectories/' + str(n_participant) + '_mouse_traj_' + str(traj_number) + '.csv', 'a') as f:
+            traj_mouse_int = interpolate_traj(posList, true_traj)
+            thewriter = csv.writer(f)
+            thewriter.writerow(traj_mouse_int)
+        posList = []
+
+        with open('trajectories/' + str(n_participant) + '_mouse_traj_' + str(traj_number) + '_dtime.csv', 'a') as f:
+            thewriter = csv.writer(f)
+            data = []
+            data.append(d_time)
+            thewriter.writerow(data)
+
+
+
+    if start_mouse == True and event == cv2.EVENT_MOUSEMOVE:
+        posList.append((x, y))
+
 
 def gesture_system_control(gesture_ml):
     # ----moving_average, get smooth data about number of gesture----
@@ -293,10 +344,11 @@ def predicting():
 def make_trajecotry(number):
     true_traj = []
 
+    move_up = 30
     # --square--
     if number == 1:
         n_inter = 20
-        key_points = ((120, 100), (400, 100), (400, 350), (120, 350))
+        key_points = ((300, 100-move_up), (500, 100-move_up), (500, 300-move_up), (300, 300-move_up))
         for i in range(len(key_points) - 1):
             x = np.linspace(key_points[i][0], key_points[i + 1][0], num=n_inter, endpoint=True)
             y = np.linspace(key_points[i][1], key_points[i + 1][1], num=n_inter, endpoint=True)
@@ -310,7 +362,7 @@ def make_trajecotry(number):
     # --circle--
     if number == 2:
         n_inter = 100
-        center = (320, 230)
+        center = (320, 230-move_up)
         r = 100
         dtheta = 2 * math.pi / n_inter
         theta = 0
@@ -323,7 +375,7 @@ def make_trajecotry(number):
     # --square--
     if number == 3:
         n_inter = 40
-        key_points = ((310, 120), (470, 320), (180, 320))
+        key_points = ((310, 120-move_up), (470, 320-move_up), (180, 320-move_up))
         for i in range(len(key_points) - 1):
             x = np.linspace(key_points[i][0], key_points[i + 1][0], num=n_inter, endpoint=True)
             y = np.linspace(key_points[i][1], key_points[i + 1][1], num=n_inter, endpoint=True)
@@ -492,7 +544,9 @@ def get_hand_parameter_2(points):
 
 time_measure = False
 start = 0
+start_mouse = False
 
+posList = []
 cord_recorded = []
 lines_recorded = []
 recorded_letters = []
@@ -517,13 +571,15 @@ while True:
         draw_lines()
 
     if points is not None:
-        for point in points:
-            x, y = point
-            cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
-        for connection in connections:
-            x0, y0 = points[connection[0]]
-            x1, y1 = points[connection[1]]
-            cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
+        # for point in points:
+        #     x, y = point
+        #     cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
+        # for connection in connections:
+        #     x0, y0 = points[connection[0]]
+        #     x1, y1 = points[connection[1]]
+        #     cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
+        #
+        # cv2.circle(frame, (int(points[8][0]), int(points[8][1])), THICKNESS * 2, POINT_COLOR, THICKNESS)
 
         sign_coords = points.flatten() / float(frame.shape[0]) - 0.5
         sign_class = sign_classifier.predict(np.expand_dims(sign_coords, axis=0))
@@ -617,16 +673,16 @@ while True:
                     traj_recorded_int = interpolate_traj(traj_recorded, true_traj)
 
                     # smooth data traj
-                    #traj_recorded_mean = exp_mean(traj_recorded)
-                    #traj_recorded_int_mean = exp_mean(traj_recorded_int)
+                    # traj_recorded_mean = exp_mean(traj_recorded)
+                    # traj_recorded_int_mean = exp_mean(traj_recorded_int)
 
                     # ---show images---
                     # -draw true traj-
-                    #img_trajectory = draw_trajectory_line(true_traj, img_trajectory, (255, 255, 255))
+                    # img_trajectory = draw_trajectory_line(true_traj, img_trajectory, (255, 255, 255))
                     img_trajectory = draw_trajectory_line(true_traj, img_trajectory, (255, 255, 255), 1)
 
                     # -draw recorded-
-                    #img_trajectory = draw_trajectory(traj_recorded, img_trajectory, (0, 255, 0))
+                    # img_trajectory = draw_trajectory(traj_recorded, img_trajectory, (0, 255, 0))
                     img_trajectory = draw_trajectory_line(traj_recorded, img_trajectory, (255, 255, 0), 1)
 
                     # -draw smooth recorded-
@@ -635,8 +691,7 @@ while True:
 
                     # -draw interpolate-
                     img_trajectory = draw_trajectory(traj_recorded_int, img_trajectory, (255, 0, 255))
-                    #img_trajectory = draw_trajectory_line(traj_recorded_int, img_trajectory, (0, 255, 255), 1)
-
+                    # img_trajectory = draw_trajectory_line(traj_recorded_int, img_trajectory, (0, 255, 255), 1)
 
                     # draw lines
                     # img_trajectory = draw_trajectory(traj_recorded_int, img_trajectory, (255, 0, 255))
@@ -647,11 +702,11 @@ while True:
                     # --- END SHOW TRAJECTORIES---
 
                     # ---INTRAPOLATE TRAJ---
-                    #new_traj = my_intapolation(traj_recorded, 100)
-                    #img_trajectory = draw_trajectory(new_traj, img_trajectory, (255, 255, 0))
+                    # new_traj = my_intapolation(traj_recorded, 100)
+                    # img_trajectory = draw_trajectory(new_traj, img_trajectory, (255, 255, 0))
 
                     cv2.imshow('Draw trajectory', img_trajectory)
-                    #cv2.imshow('Trajectory 2', img_trajectory_2)
+                    # cv2.imshow('Trajectory 2', img_trajectory_2)
 
                     # ---COMPARE TRAJECTORIES---
                     # print('delta time (sec):', d_time)
@@ -661,22 +716,35 @@ while True:
                     # print('MSE:', mean_squared_error(true_traj, traj_recorded_int_mean))
 
                     # ---SAVE TRAJECTORIES---
-                    # todo: make csv file, save trajectories
-                    with open('trajectories/draw_traj_' + str(traj_number) + '.csv', 'a') as f:
+                    with open('trajectories/' + str(n_participant) +  '_draw_traj_' + str(traj_number) + '.csv', 'a') as f:
                         thewriter = csv.writer(f)
                         thewriter.writerow(traj_recorded_int)
+
+                    with open('trajectories/' + str(n_participant) +  '_draw_traj_' + str(traj_number) + '_dtime.csv', 'a') as f:
+                        thewriter = csv.writer(f)
+                        data = []
+                        data.append(d_time)
+                        thewriter.writerow(data)
+
+
 
                 cord_recorded = []
                 lines_recorded = []
         # ------
 
+    frame = cv2.circle(frame, (640-int(true_traj[0][0]), int(true_traj[0][1])), radius=10,
+                       color=(0, 0, 255), thickness=-1)
+
     color = (0, 0, 255)
+
     frame = cv2.flip(frame, 1)
-    frameBig = cv2.resize(frame, (1200, 900))
+    frame = draw_trajectory_line(true_traj, frame, (0, 0, 255), 3)
 
-    frame = draw_trajectory(true_traj, frame, (0, 0, 255))
+
+    cv2.setMouseCallback(WINDOW, onMouse)
+
+    #frameBig = cv2.resize(frame, (1200, 900))
     cv2.imshow(WINDOW, frame)
-
     hasFrame, frame = capture.read()
     key = cv2.waitKey(1)
     if key == 27:

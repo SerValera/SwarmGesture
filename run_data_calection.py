@@ -31,14 +31,14 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
 
 WINDOW = "Hand Tracking"
-PALM_MODEL_PATH = "../../catkin_ws/src/swarm_drones/scripts/models/palm_detection_without_custom_op.tflite"
-LANDMARK_MODEL_PATH = "../../catkin_ws/src/swarm_drones/scripts/models/hand_landmark.tflite"
+PALM_MODEL_PATH = "models/palm_detection_without_custom_op.tflite"
+LANDMARK_MODEL_PATH = "models/hand_landmark.tflite"
 
 # PALM_MODEL_PATH = "models/pose_detection.tflite"
 # LANDMARK_MODEL_PATH = "models/pose_landmark_upper_body.tflite"
 
 
-ANCHORS_PATH = "../../catkin_ws/src/swarm_drones/scripts/models/anchors.csv"
+ANCHORS_PATH = "models/anchors.csv"
 
 POINT_COLOR = (0, 255, 0)
 CONNECTION_COLOR = (255, 0, 0)
@@ -132,11 +132,11 @@ while hasFrame:
             x1, y1 = points[connection[1]]
             cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
 
-        # print(i)
-        # i += 1
-        # with open('database_Alexeii/gesture_' + gestures[9] + '.csv', 'a') as f:
-        #     thewriter = csv.writer(f)
-        #     thewriter.writerow(points)
+        print(i)
+        i += 1
+        with open('dataset/all/gesture_' + gestures[9] + '.csv', 'a') as f:
+            thewriter = csv.writer(f)
+            thewriter.writerow(points)
 
     color = (0, 0, 255)
     frame = cv2.flip(frame, 1)

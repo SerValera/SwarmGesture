@@ -48,6 +48,7 @@ detector = HandTracker(
 # ------------
 
 
+
 sign_classifier = load_model('models/model2.h5')
 SIGNS = ['one', 'two', 'three', 'four', 'five', 'ok', 'rock', 'thumbs_up']
 SIGNS_dict = {
@@ -427,7 +428,7 @@ while True:
         # ------
 
     # frameBig = cv2.resize(frame, (1200, 900))
-    print(data_out_parameters)
+    # print(data_out_parameters)
     pub_parameters.publish(str(data_out_parameters))
     cv2.imshow(WINDOW, frame)
 
