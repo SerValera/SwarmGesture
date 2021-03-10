@@ -8,6 +8,7 @@ import numpy as np
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
 
+import csv
 import math
 import time
 from collections import deque
@@ -40,15 +41,16 @@ pub_add_hand = rospy.Publisher('add_hand', String, queue_size=10)
 
 pub_gesture = rospy.Publisher('/gesture_number', String, queue_size=10)
 
-rate = rospy.Rate(10)  # 4hz
+rate = rospy.Rate(15)  # 4hz
 
 n_drones = 5
 running_size = 5
 
-x_start = (-0.5, 0.5, 0.5, -0.5, 0)
-y_start = (0.5, 0.5, -0.5, -0.5, 0)
-z_start = (0, 0, 0, 0, 0)
+x_start = (1.2, 1.2, 1.2, 0, 0)
+y_start = (-0.5, 0, 0.5, 0, 0)
+z_start = (0, 0, 0, -6, -8)
 
+#target_point = [(), ()]
 
 class SendPositionNode(object):
     def __init__(self):
@@ -94,6 +96,7 @@ class SendPositionNode(object):
         self.hand_l_param_a = 0
 
         self.delta_a = 0
+        self.figure = 1
 
         time.sleep(1)
         self.publish_add_hund()
@@ -101,6 +104,9 @@ class SendPositionNode(object):
         self.collected_gesture = deque([0])
         for i in range(running_size - 1):
             self.collected_gesture.append(i)
+
+        self.read_traj = []
+        self.last_coordinates = []
 
     def init_position(self):
         for i in range(self.n_drones):
@@ -134,47 +140,99 @@ class SendPositionNode(object):
             for i in range(self.n_drones):
                 self.end_coordinates.append([x_start[i], y_start[i], z_start[i] + 1])
             if self.current_coordinates[0][2] == self.end_coordinates[0][2]:
-                self.status = 'IN FLIGHT. MAIN'
+                self.status = 'MODE: 1'
 
         if self.status == 'LAND':
-            self.end_coordinates = []
+            self.end_coordinates = self.last_coordinates
+            print(self.end_coordinates)
             for i in range(self.n_drones):
-                self.end_coordinates.append([x_start[i], y_start[i], z_start[i] + 1])
+                self.end_coordinates[i][2] = 0
+                print(self.end_coordinates)
             if self.current_coordinates[0][2] == self.end_coordinates[0][2]:
                 self.status = 'BEGIN'
 
         if self.status == 'IN FLIGHT. MAIN':
+            # print('we are here')
             self.end_coordinates = []
             for i in range(self.n_drones):
                 self.end_coordinates.append([x_start[i], y_start[i], z_start[i] + 1])
 
-        if self.status == 'MODE: 1':
-            if self.gesture_number_right == 5:
-                l = (self.hand_r_param_l * 0.5) * 0.5
-                a = self.delta_a
+        if self.status == 'TRAJECTORY':
+            start = time.time()
+            k = 0
+            while k != len(self.read_traj):
+                # -convert coordinates-
+                frame_size = (640, 480, 50)
+                shift = (25, 0.5, 0)
+                room_size = (3, 3, 2.5)  # x, y, z
 
+                # transform px to coordinates VICON system (meters)
+                def transform(pos, frame_size, shift, room_size):
+                    new_coordinates = [(pos[0] / frame_size[0] - shift[1]) * room_size[1],
+                                       ((frame_size[1] - pos[1]) / frame_size[1] + shift[2]) * room_size[2]]
+                    return new_coordinates
+
+                self.read_traj_meter = transform(self.read_traj[k], frame_size, shift, room_size)
+
+                # self.prepare_data_out_and_publish(msg=' ')
+                self.data5.pose.position.x = self.read_traj_meter[0]
+                self.data5.pose.position.y = self.read_traj_meter[1] - 1
+                self.data5.pose.position.z = 1
+
+                # print(self.data5)
+
+                if time.time() - start > 0.25:
+                    start = time.time()
+                    k += 1
+                    pub5.publish(self.data5)
+                    if k == len(self.read_traj) - 1:
+                        self.status = 'IN FLIGHT. MAIN'
+                        print('enddddd')
+
+                        self.end_coordinates = []
+                        for i in range(self.n_drones):
+                            self.end_coordinates.append([x_start[i], y_start[i], z_start[i] + 1])
+                        break
+
+        if self.status == 'MODE: 1':
+
+            if self.gesture_number_right == 5 or self.gesture_number_right == 4:
+                self.last_coordinates = []
+
+                l = (self.hand_r_param_l * 0.5) * 0.5
+                a = (self.delta_a - 90) / 2
                 pi = math.pi
 
-                x = (-l * math.cos(pi / 4 + a * pi / 180), l * math.cos(pi / 4 - a * pi / 180),
-                     l * math.cos(pi / 4 + a * pi / 180), -l * math.cos(pi / 4 - a * pi / 180), 0)
-                y = (l * math.sin(pi / 4 + a * pi / 180), l * math.sin(pi / 4 - a * pi / 180),
-                     -l * math.sin(pi / 4 + a * pi / 180), -l * math.sin(pi / 4 - a * pi / 180), 0)
-                z = (0, 0, 0, 0, 0)
+                if self.figure == 1:
+                    x = (-l * math.cos(pi / 4 + a * pi / 180), 0,
+                         l * math.cos(pi / 4 + a * pi / 180), 0, 0)
+                    y = (l * math.sin(pi / 4 + a * pi / 180), 0,
+                         -l * math.sin(pi / 4 + a * pi / 180), 0, 0)
+                    z = (0, 0, 0, -2, -4)
+
+                if self.figure == 2:
+                    l -= 0.1
+                    x = (l * math.cos(7*pi / 6 - a * pi / 180), l * math.cos(11*pi / 6 - a * pi / 180),
+                         l * math.cos(pi / 2 - a * pi / 180), 0, 0)
+                    y = (l * math.sin(7*pi / 6 - a * pi / 180), l * math.sin(11*pi / 6 - a * pi / 180),
+                         l * math.sin(pi / 2 - a * pi / 180), 0, 0)
+                    z = (0, 0, 0, -6, -8)
+
+                # x = (-l * math.cos(pi / 4 + a * pi / 180), l * math.cos(pi / 4 - a * pi / 180),
+                #      l * math.cos(pi / 4 + a * pi / 180), -l * math.cos(pi / 4 - a * pi / 180), 0)
+                # y = (l * math.sin(pi / 4 + a * pi / 180), l * math.sin(pi / 4 - a * pi / 180),
+                #      -l * math.sin(pi / 4 + a * pi / 180), -l * math.sin(pi / 4 - a * pi / 180), 0)
+                # z = (0, 0, 0, 0, 0)
 
                 # x = (-l, l, l, -l, 0)
                 # y = (l, l, -l, -l, 0)
                 # z = (0, 0, 0, 0, 0)
 
-            else:
-                pi = math.pi
-                l = (self.hand_r_param_l - 0.5) * 0.5
-                x = (-l, l, l, -l, 0)
-                y = (l, l, -l, -l, 0)
-                z = (0, 0, 0, 0, 0)
-
             self.end_coordinates = []
             for i in range(self.n_drones):
                 self.end_coordinates.append(
+                    [self.pos_r[0] + x[i], self.pos_r[1] + y[i], self.pos_r[2] + z[i]])
+                self.last_coordinates.append(
                     [self.pos_r[0] + x[i], self.pos_r[1] + y[i], self.pos_r[2] + z[i]])
             # print('end_coordinates', self.end_coordinates)
 
@@ -183,12 +241,12 @@ class SendPositionNode(object):
 
         # ---Coefitiont of potential fields---
         # save distance between drones
-        r_save = 0.4
+        r_save = 0.35
         # finish radius of scan
         r_scan = 0.1
         # length of total_vector
-        dt = 0.05
-        coef_obsticl = 45
+        dt = 0.02
+        coef_obsticl = 30
         # ---End coefitiones---
 
         # ---function to set end/next positons for swarm---
@@ -277,6 +335,13 @@ class SendPositionNode(object):
         rospy.Subscriber('/hands_boarder', String, self.callback_hands_boarder)
         rospy.Subscriber('/letter_drone', String, self.resent)
         rospy.Subscriber('/hands_parameters', String, self.get_hand_parameters)
+        rospy.Subscriber('/send_traj', String, self.start_mouse_flight)
+
+    def start_mouse_flight(self, msg):
+        self.read_traj_mouse_csv_true()
+        time.sleep(1)
+        self.status = 'TRAJECTORY'
+        print('TRAJECTORY MOUSE')
 
     def resent(self, msg):
         pub_for_drawing.publish(msg.data)
@@ -324,6 +389,8 @@ class SendPositionNode(object):
     def get_hand_parameters(self, msg):
         data = msg.data
         hand_parameters = re.findall(r"[-+]?\d*\.\d+|\d+", data)
+
+        # print(hand_parameters)
         if self.gesture_number_right == 5:
             self.hand_r_param_l = float(hand_parameters[2])
             self.hand_r_param_a = float(hand_parameters[3])
@@ -338,12 +405,93 @@ class SendPositionNode(object):
     def subscriber_clock(self):
         # ---subscriper for trajectory generation--
         rospy.Subscriber('/test_clock_py', String, self.coordinates_processsing)
-        rospy.Subscriber('/test_clock_py', String, self.gesture_system_control)
+        rospy.Subscriber('/test_clock_py', String, self.gesture_system_control)  # swarm_hand control
+        # rospy.Subscriber('/test_clock_py', String, self.gesture_control_send_traj) #drawing trajectory
         # rospy.Subscriber('/test_clock_py', String, self.gesture_system_control_land_take_off)
         rospy.Subscriber('/test_clock_py', String, self.prepare_data_out_and_publish)
 
         if self.end_coordinates != []:
             rospy.Subscriber('/test_clock_py', String, self.move_to_end)
+
+    def read_traj_csv_true(self):
+        with open('/home/sk/PycharmProjects/hand_tracking-master-2/trajectories/draw_drone.csv', newline='') as file:
+            true_traj = []
+            data = csv.reader(file)
+            for row in data:
+                row = np.array(row)
+                for i in range(len(row)):
+                    true_traj.append(row[i][1:-1])
+                    data_float = re.findall(r"[-+]?\d*\.\d+|\d+", true_traj[i])
+                    true_traj[i] = (float(data_float[0]), float(data_float[1]))
+                self.read_traj = true_traj
+            print(self.read_traj)
+
+    def read_traj_mouse_csv_true(self):
+        with open('/home/sk/PycharmProjects/hand_tracking-master-2/trajectories/mouse_drone.csv', newline='') as file:
+            true_traj = []
+            data = csv.reader(file)
+            for row in data:
+                row = np.array(row)
+                for i in range(len(row)):
+                    true_traj.append(row[i][1:-1])
+                    data_float = re.findall(r"[-+]?\d*\.\d+|\d+", true_traj[i])
+                    true_traj[i] = (float(data_float[0]), float(data_float[1]))
+                self.read_traj = true_traj
+            print(self.read_traj)
+
+    def gesture_control_send_traj(self, msg):
+        # ----moving_average, get smooth data about number of gesture----
+        self.collected_gesture.rotate(1)
+        self.collected_gesture[0] = self.gesture_number_right
+        average = sum(self.collected_gesture) / running_size
+        rounding = round(average)
+        identical = 1
+        for i in range(len(self.collected_gesture)):
+            for j in range(len(self.collected_gesture)):
+                if self.collected_gesture[i] == self.collected_gesture[j]:
+                    identical = identical * 1
+                else:
+                    identical = identical * 0
+        # print(self.collected_gesture, average, identical)
+
+        current_gesture_right = self.gesture_number_right
+        current_gesture_left = self.gesture_number_left
+
+        if (current_gesture_right != self.previous_gesture_right) and identical:
+            self.count += 1
+            # print(self.collected_gesture, average, rounding, identical)
+            print(self.count, 'previous:', self.previous_gesture_right, ', current:', current_gesture_right)
+
+            if (self.status != 'BEGIN') and (self.previous_gesture_right == 5) and (current_gesture_right == 8):
+                self.status = 'BEGIN'
+                print('LAND ALL')
+                pub_for_drawing.publish('land')
+                time.sleep(2)
+
+            if (self.status == 'BEGIN') and (self.previous_gesture_right == 1) and (current_gesture_right == 8):
+                print('From begin to TAKE OFF')
+                self.status = 'TAKE OFF'
+                pub_for_drawing.publish('takeoff')
+                time.sleep(2)
+
+            # ---END FLIGHT---
+            if (self.status == 'IN FLIGHT. MAIN') and (self.previous_gesture_right == 5) and (
+                    current_gesture_right == 8):
+                self.status = 'LAND'
+                print('LAND')
+                pub_for_drawing.publish('land')
+                time.sleep(2)
+
+            # ---READ AND SEND TRAJECTORIES---
+            if (self.status == 'IN FLIGHT. MAIN') and (self.previous_gesture_right == 5) and (
+                    current_gesture_right == 6):
+                print('READ TRAJ')
+                time.sleep(1)
+                self.read_traj_csv_true()
+                self.status = 'TRAJECTORY'
+
+            self.previous_gesture_right = current_gesture_right
+            self.previous_gesture_left = current_gesture_left
 
     def gesture_system_control(self, msg):
         # ----moving_average, get smooth data about number of gesture----
@@ -371,17 +519,23 @@ class SendPositionNode(object):
             if (self.status != 'BEGIN') and (self.previous_gesture_right == 5) and (current_gesture_right == 8):
                 self.status = 'BEGIN'
                 print('LAND ALL')
+                pub_for_drawing.publish('land')
+                time.sleep(2)
 
-            if (self.status == 'BEGIN') and (self.previous_gesture_right == 1) and (current_gesture_right == 6):
+            if (self.status == 'BEGIN') and (self.previous_gesture_right == 1) and (current_gesture_right == 8):
                 print('From begin to TAKE OFF')
-                self.status = 'TAKE OFF'
+                self.status = 'MODE: 1'
+                #self.status = 'LAND'
+                pub_for_drawing.publish('takeoff')
+                time.sleep(2)
 
             # ---END FLIGHT---
             if (self.status == 'IN FLIGHT. MAIN') and (self.previous_gesture_right == 5) and (
-                    current_gesture_right == 6):
+                    current_gesture_right == 8):
                 self.status = 'LAND'
                 print('LAND')
-                pub_gesture.publish('land')
+                pub_for_drawing.publish('land')
+                time.sleep(2)
 
             # ---CHOOSE MODE 1. CHANGE FORMS OF SWARM---
             if (self.status == 'IN FLIGHT. MAIN') and (self.previous_gesture_right == 5) and (
@@ -418,12 +572,16 @@ class SendPositionNode(object):
             # ---MODE 1---
             if (self.status == 'MODE: 1') and (self.previous_gesture_right == 5) and (current_gesture_right == 1):
                 print('fig ONE')
+                self.figure = 1
             if (self.status == 'MODE: 1') and (self.previous_gesture_right == 5) and (current_gesture_right == 2):
                 print('fig TWO')
+                self.figure = 2
             if (self.status == 'MODE: 1') and (self.previous_gesture_right == 5) and (current_gesture_right == 3):
                 print('fig THREE')
-            if (self.status == 'MODE: 1') and (self.previous_gesture_right == 5) and (current_gesture_right == 4):
-                print('fig FORE')
+                self.figure = 3
+            # if (self.status == 'MODE: 1') and (self.previous_gesture_right == 5) and (current_gesture_right == 4):
+            #     print('fig FORE')
+            #     self.figure = 4
             if (self.status == 'MODE: 1') and (self.previous_gesture_right == 5) and (current_gesture_right == 6):
                 print('IN FLIGHT. MAIN')
                 self.status = 'IN FLIGHT. MAIN'
@@ -495,7 +653,14 @@ class SendPositionNode(object):
         # publish positions
         self.publish_positions()
 
+
+
     def publish_positions(self):
+        def get_distance(data):
+            x = data.pose.position.x
+            y = data.pose.position.y
+            z = data.pose.position.z
+
         pub1.publish(self.data1)
         pub2.publish(self.data2)
         pub3.publish(self.data3)

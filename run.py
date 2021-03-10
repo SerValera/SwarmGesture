@@ -2,6 +2,7 @@
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 import rospy
+from collections import deque
 
 rospy.init_node('gesture', anonymous=True)
 pub_right = rospy.Publisher('/hand_position_right', PoseStamped, queue_size=10)
@@ -18,7 +19,7 @@ data_out_parameters = []
 
 
 
-rate = rospy.Rate(10)  # 10hz
+rate = rospy.Rate(15)  # 10hz
 parameters_points_1 = [1, 0]
 parameters_points_2 = [1, 0]
 # --------------
@@ -64,7 +65,7 @@ SIGNS_dict = {
 
 POINT_COLOR = (0, 255, 0)
 CONNECTION_COLOR = (255, 0, 0)
-THICKNESS = 2
+THICKNESS = 1
 
 cv2.namedWindow(WINDOW)
 capture = cv2.VideoCapture(0)
@@ -188,7 +189,7 @@ def draw_lines():
             for j in range(len(lines_recorded[i]) - 1):
                 cv2.line(frame, (int(lines_recorded[i][j][0]), int(lines_recorded[i][j][1])),
                          (int(lines_recorded[i][j + 1][0]),
-                          int(lines_recorded[i][j + 1][1])), (0, 255, 0), thickness=5)
+                          int(lines_recorded[i][j + 1][1])), (0, 255, 0), thickness=15)
     # ----for one line recorder----
     if cord_recorded != []:
         if len(cord_recorded) > 1:
@@ -237,6 +238,7 @@ def get_positon_hand(points):
     pulm_size = get_size_pulm(pulm_key_point)
     # position = (x/100, pulm_size / 10, 5 - y / 100)
     position = (x, y, pulm_size)
+    #position = (int(x), int(y), int(pulm_size))
     return position
 
 
@@ -277,6 +279,19 @@ def get_hand_parameter_2(points):
     if (degs < 0):
         degs += 90
     return degs
+
+
+#---for running smothing---
+size = 5
+collecter_x = deque([0])
+collecter_y = deque([0])
+collecter_z = deque([0])
+
+for i in range(size - 1):
+    collecter_x.append(0)
+    collecter_y.append(0)
+    collecter_z.append(0)
+#------------
 
 
 cord_recorded = []
@@ -367,7 +382,21 @@ while True:
         gesture_ml = int(SIGNS_dict[sign_text])
         position = get_positon_hand(points)
 
-        if gesture_ml == 5:
+        #---average running---
+        collecter_x.rotate(1)
+        collecter_y.rotate(1)
+        collecter_z.rotate(1)
+
+        collecter_x[0], collecter_y[0], collecter_z[0] = position[0], position[1], position[2]
+        position_average = (sum(collecter_x)/size, sum(collecter_y)/size, sum(collecter_z)/size)
+        #print(position_average)
+
+        position = position_average
+        # position_new = get_positon_hand(points)
+        #print(position)
+        cv2.circle(frame, (int(position[0]), int(position[1])), THICKNESS * 2, (0, 0, 255), 5)
+
+        if gesture_ml == 5 or gesture_ml == 4:
             param_r_1 = get_hand_parameter_1(points)
             param_r_2 = get_hand_parameter_2(points)
             parameters_points_1[0] = param_r_1
@@ -377,7 +406,20 @@ while True:
             param_r_2 = get_hand_parameter_2(points)
             parameters_points_1[1] = param_r_2
 
-        # print(parameters_points_1, parameters_points_2)
+        print('Distance between fingers: ' + str("{:.2f}".format(parameters_points_1[0])), '. Angle of inclination of the hand: ' + str("{:.1f}".format(parameters_points_1[1])))
+
+        text_dist = 'Distance between fingers: ' + str("{:.2f}".format(parameters_points_1[0]))
+        text_angle = 'Inclination of the hand (degrees): ' + str("{:.1f}".format(parameters_points_1[1]))
+        text_position = 'Hand coordinates (px): ' + str("{:.2f}".format(position[0])) + '; ' + str("{:.2f}".format(position[1]))
+        text_dept = 'Depth ' + str("{:.2f}".format(position[2]))
+        text_gesture = 'Gesture: ' + sign_text
+
+        shift = 45
+        cv2.putText(frame, text_dist, (25, 25+shift), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), 2)
+        cv2.putText(frame, text_angle, (25, 65+shift), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), 2)
+        cv2.putText(frame, text_position, (25, 105+shift), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), 2)
+        cv2.putText(frame, text_dept, (25, 145+shift), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), 2)
+
         gesture_ml = int(SIGNS_dict[sign_text])
         # gesture, gesture_number = gesture_recognition(points)
 
@@ -427,7 +469,7 @@ while True:
                 lines_recorded = []
         # ------
 
-    # frameBig = cv2.resize(frame, (1200, 900))
+    frameBig = cv2.resize(frame, (1200, 900))
     # print(data_out_parameters)
     pub_parameters.publish(str(data_out_parameters))
     cv2.imshow(WINDOW, frame)

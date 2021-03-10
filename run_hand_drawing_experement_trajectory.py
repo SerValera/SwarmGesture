@@ -2,10 +2,14 @@
 # -*- coding: utf-8 -*-
 # -*- coding: cp1251 -*-
 
+#---choose trajectory--- 1, 2  3
+traj_number = 1
+n_participant = 8
 
-traj_number = 3
-n_participant = 3
+import matplotlib
 
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 
 import math
 import time
@@ -25,6 +29,8 @@ pub1 = rospy.Publisher('/hand_position_right', PoseStamped, queue_size=10)
 # pub2 = rospy.Publisher('/gesture_number', PoseStamped, queue_size=10)
 pub3 = rospy.Publisher('/letter_drone', String, queue_size=10)
 
+pub_send_traj = rospy.Publisher('/send_traj', String, queue_size=10)
+
 data_out_position = PoseStamped()
 data_out_gesture = PoseStamped()
 rate = rospy.Rate(10)  # 10hz
@@ -33,7 +39,7 @@ rate = rospy.Rate(10)  # 10hz
 # ---Anabling to draw on the screen by hand---
 import matplotlib.pyplot as plt
 
-draw_line = True
+draw_line = False
 
 import csv
 import math
@@ -75,8 +81,8 @@ letters_rus_psevdo = {1: 'a', 2: 'b', 3: 'v', 4: 'g', 5: 'a', 6: 'e', 7: 'j', 8:
                       20: 'y', 21: 'f', 22: 'x', 23: 'ch', 24: 'ch', 25: 'sh', 26: 'sh', 27: 'b', 28: 'n', 29: 'b',
                       30: 'ee', 31: 'u', 32: 'ya'}
 
-thickness_draw_line = 5
-thickness_record_line = 5
+thickness_draw_line = 3
+thickness_record_line = 3
 
 
 
@@ -156,6 +162,31 @@ detector = HandTracker(
     box_enlarge=1.3
 )
 
+
+def plot_trajectories(int_traj, draw_traj, color_int, color_draw):
+    plt.figure()
+    plt.title('Trajectory processing')
+
+    x = []
+    y = []
+    for i in range(len(draw_traj)):
+        x.append(draw_traj[i][0])
+        y.append(draw_traj[i][1])
+    plt.plot(x, y, 'r', label='gesture given')
+    plt.plot(x, y, 'r.')
+
+    x_t = []
+    y_t = []
+    for i in range(len(int_traj)):
+        x_t.append(int_traj[i][0])
+        y_t.append(int_traj[i][1])
+    plt.plot(x_t, y_t, 'b', label='generated trajectory')
+    plt.plot(x_t, y_t, 'b.')
+
+    plt.xlabel("X, px")
+    plt.ylabel("Y, px")
+    plt.legend()
+    plt.show()
 
 def get_size_pulm(pulm_key_point):
     # calculation size of pulm
@@ -284,19 +315,27 @@ def onMouse(event, x, y, flags, param):
         d_time = end_time - start
         print(start_mouse)
         # ---SAVE TRAJECTORIES---
-        with open('trajectories/' + str(n_participant) + '_mouse_traj_' + str(traj_number) + '.csv', 'a') as f:
+        # with open('trajectories/' + str(n_participant) + '_mouse_traj_' + str(traj_number) + '.csv', 'a') as f:
+        #     traj_mouse_int = interpolate_traj(posList, true_traj)
+        #     thewriter = csv.writer(f)
+        #     thewriter.writerow(traj_mouse_int)
+        # posList = []
+
+        with open('trajectories/mouse_drone.csv', 'w') as f:
             traj_mouse_int = interpolate_traj(posList, true_traj)
             thewriter = csv.writer(f)
             thewriter.writerow(traj_mouse_int)
         posList = []
+
+        rospy.sleep(1)
+        pub_send_traj.publish('start_mouse')
+        rospy.sleep(1)
 
         with open('trajectories/' + str(n_participant) + '_mouse_traj_' + str(traj_number) + '_dtime.csv', 'a') as f:
             thewriter = csv.writer(f)
             data = []
             data.append(d_time)
             thewriter.writerow(data)
-
-
 
     if start_mouse == True and event == cv2.EVENT_MOUSEMOVE:
         posList.append((x, y))
@@ -344,7 +383,7 @@ def predicting():
 def make_trajecotry(number):
     true_traj = []
 
-    move_up = 30
+    move_up = 15
     # --square--
     if number == 1:
         n_inter = 20
@@ -361,7 +400,7 @@ def make_trajecotry(number):
 
     # --circle--
     if number == 2:
-        n_inter = 100
+        n_inter = 50
         center = (320, 230-move_up)
         r = 100
         dtheta = 2 * math.pi / n_inter
@@ -374,7 +413,7 @@ def make_trajecotry(number):
 
     # --square--
     if number == 3:
-        n_inter = 40
+        n_inter = 15
         key_points = ((310, 120-move_up), (470, 320-move_up), (180, 320-move_up))
         for i in range(len(key_points) - 1):
             x = np.linspace(key_points[i][0], key_points[i + 1][0], num=n_inter, endpoint=True)
@@ -393,10 +432,10 @@ def make_trajecotry(number):
     return true_traj
 
 
-def draw_trajectory(true_traj, frame, color_p):
+def draw_trajectory(true_traj, frame, color_p, radius):
     # ---show trajectory by cv---
     for i in range(len(true_traj)):
-        cv2.circle(frame, (int(true_traj[i][0]), int(true_traj[i][1])), radius=1, color=color_p, thickness=-1)
+        cv2.circle(frame, (int(true_traj[i][0]), int(true_traj[i][1])), radius=radius, color=color_p, thickness=-1)
     return frame
 
 
@@ -578,8 +617,8 @@ while True:
         #     x0, y0 = points[connection[0]]
         #     x1, y1 = points[connection[1]]
         #     cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
-        #
-        # cv2.circle(frame, (int(points[8][0]), int(points[8][1])), THICKNESS * 2, POINT_COLOR, THICKNESS)
+
+        #cv2.circle(frame, (int(points[8][0]), int(points[8][1])), THICKNESS * 2, POINT_COLOR, THICKNESS)
 
         sign_coords = points.flatten() / float(frame.shape[0]) - 0.5
         sign_class = sign_classifier.predict(np.expand_dims(sign_coords, axis=0))
@@ -634,6 +673,15 @@ while True:
                 cord_recorded = []
                 lines_recorded = []
 
+            # ---Clean screen---
+            if (previous_gesture_right == 1) and (current_gesture_right == 8):
+                draw_line = True
+                print('take off. Start drawing')
+
+            if (previous_gesture_right == 5) and (current_gesture_right == 8):
+                draw_line = False
+                print('land. End drawing')
+
             previous_gesture_right = current_gesture_right
         ####
 
@@ -661,8 +709,8 @@ while True:
                 d_time = end_time - start
                 time_measure = False
                 if lines_recorded != []:
-                    img_trajectory = np.zeros((height, width, 3), np.uint8)  # make the background white
-                    img_trajectory_2 = np.zeros((height, width, 3), np.uint8)  # make the background white
+                    img_trajectory = np.ones((height, width, 3), np.uint8)  # make the background white
+                    img_trajectory_2 = np.ones((height, width, 3), np.uint8)  # make the background white
 
                     for i in range(len(lines_recorded)):
                         for j in range(len(lines_recorded[i]) - 1):
@@ -670,6 +718,9 @@ while True:
 
                     # ---SHOW TRAJECTORIES---
                     # linear intropolation of the traj
+                    traj_recorded_orig = traj_recorded
+
+                    traj_recorded = exp_mean(traj_recorded)
                     traj_recorded_int = interpolate_traj(traj_recorded, true_traj)
 
                     # smooth data traj
@@ -678,21 +729,26 @@ while True:
 
                     # ---show images---
                     # -draw true traj-
-                    # img_trajectory = draw_trajectory_line(true_traj, img_trajectory, (255, 255, 255))
-                    img_trajectory = draw_trajectory_line(true_traj, img_trajectory, (255, 255, 255), 1)
+                    # img_trajectory = draw_trajectory_line(true_traj, img_trajectory, (255, 255, 255), 1)
+                    # img_trajectory = draw_trajectory_line(true_traj, img_trajectory, (255, 255, 255), 1)
 
                     # -draw recorded-
-                    # img_trajectory = draw_trajectory(traj_recorded, img_trajectory, (0, 255, 0))
-                    img_trajectory = draw_trajectory_line(traj_recorded, img_trajectory, (255, 255, 0), 1)
+                    img_trajectory = draw_trajectory(traj_recorded_orig, img_trajectory, (0, 0, 255), 2)
+                    img_trajectory = draw_trajectory_line(traj_recorded_orig, img_trajectory, (0, 0, 255), 1)
+
+                    # -draw recorded mean-
+                    #img_trajectory = draw_trajectory(traj_recorded, img_trajectory, (0, 255, 0))
+                    #img_trajectory = draw_trajectory_line(traj_recorded, img_trajectory, (255, 255, 0), 1)
 
                     # -draw smooth recorded-
-                    # img_trajectory = draw_trajectory(traj_recorded_mean, img_trajectory, (255, 0, 255))
+                    # img_trajectory = draw_trajectory(traj_recorded_mean, img_trajectory, (255, 0, 255), 1)
                     # img_trajectory = draw_trajectory_line(traj_recorded_mean, img_trajectory, (255, 0, 255))
 
                     # -draw interpolate-
-                    img_trajectory = draw_trajectory(traj_recorded_int, img_trajectory, (255, 0, 255))
-                    # img_trajectory = draw_trajectory_line(traj_recorded_int, img_trajectory, (0, 255, 255), 1)
+                    img_trajectory = draw_trajectory(traj_recorded_int, img_trajectory, (0, 255, 0), 2)
+                    img_trajectory = draw_trajectory_line(traj_recorded_int, img_trajectory, (0, 255, 0), 1)
 
+                    # plot_trajectories(traj_recorded_int, traj_recorded_orig, 'red', 'blue')
                     # draw lines
                     # img_trajectory = draw_trajectory(traj_recorded_int, img_trajectory, (255, 0, 255))
 
@@ -728,17 +784,26 @@ while True:
 
 
 
+                    # ---SAVE TRAJECTORY FOR DRONE---
+                    with open('trajectories/draw_drone.csv', 'w', newline='') as file:
+                        writer = csv.writer(file)
+                        writer.writerow(traj_recorded_int)
+
+                    rospy.sleep(1)
+                    pub_send_traj.publish('start_traj')
+
+
                 cord_recorded = []
                 lines_recorded = []
         # ------
 
-    frame = cv2.circle(frame, (640-int(true_traj[0][0]), int(true_traj[0][1])), radius=10,
-                       color=(0, 0, 255), thickness=-1)
-
+    #frame = cv2.circle(frame, (640-int(true_traj[0][0]), int(true_traj[0][1])), radius=10,
+    #                    color=(0, 0, 255), thickness=-1)
+    frame = draw_trajectory_line(true_traj, frame, (0, 0, 255), 3)
     color = (0, 0, 255)
 
     frame = cv2.flip(frame, 1)
-    frame = draw_trajectory_line(true_traj, frame, (0, 0, 255), 3)
+
 
 
     cv2.setMouseCallback(WINDOW, onMouse)

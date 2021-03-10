@@ -4,9 +4,9 @@ import numpy as np
 import csv
 import re
 import matplotlib
+
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-
 
 # --- choose participance and number of trajectory ---
 number_traj = 1
@@ -15,11 +15,12 @@ n_particapant = 3
 names_traj = ('square', 'circle', 'triangle')
 n_best = 3
 
-#-----------------------------------------------------
+# -----------------------------------------------------
 
 
 choose_one_traj = 2
 plot_all = False
+
 
 class TrajProcessing(object):
     def __init__(self):
@@ -47,7 +48,6 @@ class TrajProcessing(object):
 
         self.data_participant = []
 
-
     def new_trajectory(self):
         self.true_traj = []
         self.draw_traj = []
@@ -71,17 +71,37 @@ class TrajProcessing(object):
         self.index_best_draw = 0
         self.index_best_mouse = 0
 
+        self.dtime_hand = []
+        self.dtime_mouse = []
 
     def read_traj_dtime(self, n):
         with open('trajectories/' + str(n_particapant) + '_draw_traj_' + str(n) + '_dtime.csv',
                   newline='') as file:
             data = csv.reader(file)
-            print('delta time')
+            #print('delta time')
             dtime = []
+            self.dtime_hand = []
             for row in data:
                 row = np.array(row)
-                dtime.append(row[i])
-            print(dtime)
+                for i in range(len(row)):
+                    dtime.append(row[i])
+            self.dtime_hand = np.array(dtime)
+            # for i in range(len(self.dtime_hand)):
+            #     print(self.dtime_hand[i])
+
+        with open('trajectories/' + str(n_particapant) + '_mouse_traj_' + str(n) + '_dtime.csv',
+                  newline='') as file:
+            data = csv.reader(file)
+            #print('delta time')
+            dtime = []
+            self.dtime_mouse = []
+            for row in data:
+                row = np.array(row)
+                for i in range(len(row)):
+                    dtime.append(row[i])
+            self.dtime_mouse = np.array(dtime)
+            # for i in range(len(self.dtime_mouse)):
+            #     print(self.dtime_mouse[i])
 
     def read_traj_csv_true(self, n):
         with open('trajectories/true_traj_' + str(n) + '.csv', newline='') as file:
@@ -153,41 +173,44 @@ class TrajProcessing(object):
 
     def plot_all(self, true_traj, draw_traj, color):
         plt.figure()
-        plt.title('Trajectories ALL')
+        plt.title('Trajectories')
         x_t = []
         y_t = []
         for i in range(len(true_traj)):
             x_t.append(true_traj[i][0])
             y_t.append(true_traj[i][1])
-        plt.plot(x_t, y_t, label='True trajectory')
+        plt.plot(x_t, y_t, label='Ground truth')
         # plt.plot(x_t, y_t, 'bo', markersize=0)
-        for k in range(len(draw_traj)):
+
+        plt.plot(x, y, color=color, linewidth=1.0, linestyle='--', label='Gesture given')
+        for k in range(1, len(draw_traj)):
             x = []
             y = []
             for i in range(len(draw_traj[k])):
                 x.append(draw_traj[k][i][0])
                 y.append(draw_traj[k][i][1])
-            plt.plot(x, y, color=color, linewidth=1.0, linestyle='--', label='Drawing traj' + str(k))
+            plt.plot(x, y, color=color, linewidth=1.0, linestyle='--')
         plt.legend()
         plt.show()
 
     def plot_all_drawn_mouse(self, true_traj, draw_traj, color_drawn, mouse_traj, color_mouse):
         plt.figure()
-        plt.title('Trajectories ALL, Drawn, Mouse')
+        plt.title('Trajectories')
         x_t = []
         y_t = []
         for i in range(len(true_traj)):
             x_t.append(true_traj[i][0])
             y_t.append(true_traj[i][1])
-        plt.plot(x_t, y_t, label='True trajectory')
+        plt.plot(x_t, y_t, label='Ground truth')
 
         for k in range(len(self.index_best_draw[:, 1])):
             x = []
             y = []
-            for i in range(len(draw_traj[k])):
+            #plt.plot(x, y, color=color_drawn, linewidth=1.0, linestyle='--', label='Gesture given')
+            for i in range(1):
                 x.append(draw_traj[int(self.index_best_draw[k, 1])][i][0])
                 y.append(draw_traj[int(self.index_best_draw[k, 1])][i][1])
-            plt.plot(x, y, color=color_drawn, linewidth=1.0, linestyle='--', label='Drawing traj' + str(k))
+            plt.plot(x, y, color=color_drawn, linewidth=1.0, linestyle='--', label='Gesture given')
 
         # for k in range(len(draw_traj)):
         #     x = []
@@ -203,8 +226,10 @@ class TrajProcessing(object):
             for i in range(len(mouse_traj[k])):
                 x.append(mouse_traj[int(self.index_best_mouse[k, 1])][i][0])
                 y.append(mouse_traj[int(self.index_best_mouse[k, 1])][i][1])
-            plt.plot(x, y, color=color_mouse, linewidth=1.0, linestyle='--', label='Mouse traj' + str(k))
+            plt.plot(x, y, color=color_mouse, linewidth=1.0, linestyle='--', label='Mouse given' + str(k))
 
+        plt.xlabel("X, m")
+        plt.ylabel("Y, m")
         plt.legend()
         plt.show()
 
@@ -424,48 +449,56 @@ class TrajProcessing(object):
         # print(self.erros[:,1])
         # print(self.index_best_draw[:,1])
 
-        errors = np.zeros(shape=(2, 3))
+        errors = np.zeros(shape=(2, 4))
         # print(errors)
 
         max_errors = []
         mean_erros = []
         RMSE_erros = []
+        dtime = []
 
         for i in range(len(self.index_best_draw[:, 1])):
             k = int(self.index_best_draw[i, 1])
-            print("HAND. Max error: %.2f" % (self.erros[k, 0]) + "m , Mean error: %.2f" % (
-                self.erros[k, 1]) + "m , RMSE: %.2f" % (self.erros[k, 2]))
+            print("HAND. Max error: %.3f" % (self.erros[k, 0]) + "m , Mean error: %.3f" % (
+                self.erros[k, 1]) + "m , RMSE: %.3f" % (self.erros[k, 2]) + " dtime: %.1f" % (
+                      float(self.dtime_hand[k])) + " sec")
             max_errors.append(self.erros[k, 0])
             mean_erros.append(self.erros[k, 1])
             RMSE_erros.append(self.erros[k, 2])
+            dtime.append(float(self.dtime_hand[k]))
 
         errors[0, 0] = np.mean(max_errors)
         errors[0, 1] = np.mean(mean_erros)
         errors[0, 2] = np.mean(RMSE_erros)
+        errors[0, 3] = np.mean(dtime)
 
         max_errors = []
         mean_erros = []
         RMSE_erros = []
+        dtime = []
 
         for i in range(len(self.index_best_mouse[:, 1])):
             k = int(self.index_best_mouse[i, 1])
-            print("MOUSE. Max error: %.2f" % (self.erros_mouse[k, 0]) + "m , Mean error: %.2f" % (
-                self.erros_mouse[k, 1]) + "m , RMSE: %.2f" % (self.erros_mouse[k, 2]))
+            print("MOUSE. Max error: %.3f" % (self.erros_mouse[k, 0]) + "m , Mean error: %.3f" % (
+                self.erros_mouse[k, 1]) + "m , RMSE: %.3f" % (self.erros_mouse[k, 2]) + " dtime: %.1f" % (
+                      float(self.dtime_mouse[k])) + " sec")
             max_errors.append(self.erros_mouse[k, 0])
             mean_erros.append(self.erros_mouse[k, 1])
             RMSE_erros.append(self.erros_mouse[k, 2])
+            dtime.append(float(self.dtime_mouse[k]))
 
         errors[1, 0] = np.mean(max_errors)
         errors[1, 1] = np.mean(mean_erros)
         errors[1, 2] = np.mean(RMSE_erros)
+        errors[1, 3] = np.mean(dtime)
 
         print('-------------------------')
         print('Processing trajectory ' + str(len(self.data_participant) + 1))
-        print("HAND MEAN. Max error: %.2f" % (errors[0, 0]) + "m , Mean error: %.2f" % (
-            errors[0, 1]) + "m , RMSE: %.2f" % (errors[0, 2]))
+        print("HAND MEAN. Max error: %.3f" % (errors[0, 0]) + "m , Mean error: %.3f" % (
+            errors[0, 1]) + "m , RMSE: %.3f" % (errors[0, 2]) + " dtime: %.1f" % (errors[0, 3]) + ' sec')
 
-        print("MOUSE MEAN. Max error: %.2f" % (errors[1, 0]) + "m , Mean error: %.2f" % (
-            errors[1, 1]) + "m , RMSE: %.2f" % (errors[1, 2]))
+        print("MOUSE MEAN. Max error: %.3f" % (errors[1, 0]) + "m , Mean error: %.3f" % (
+            errors[1, 1]) + "m , RMSE: %.3f" % (errors[1, 2]) + " dtime: %.1f" % (errors[1, 3]) + ' sec')
 
         print('-------------------------')
         self.data_participant.append(errors)
@@ -474,8 +507,6 @@ class TrajProcessing(object):
         # self.plot_all(self.true_traj_m, self.draw_traj_m, 'red')
         # self.plot_all(self.true_traj_m, self.draw_traj_mouse_m, 'green')
 
-
-
     def plot_all(self):
         self.plot_all_drawn_mouse(self.true_traj_m, self.draw_traj_m, 'red', self.draw_traj_mouse_m, 'green')
 
@@ -483,13 +514,15 @@ class TrajProcessing(object):
         print('PARTICIPANT ' + str(n_particapant))
         for i in range(3):
             print('TRAJECTORY ' + str(i + 1) + ' ' + names_traj[i])
-            print("HAND MEAN. Max error: %.2f" % (self.data_participant[i][0, 0]) + "m , Mean error: %.2f" % (
-                self.data_participant[i][0, 1]) + "m , RMSE: %.2f" % (self.data_participant[i][0, 2]))
+            print("HAND MEAN. Max error: %.3f" % (self.data_participant[i][0, 0]) + "m , Mean error: %.3f" % (
+                self.data_participant[i][0, 1]) + "m , RMSE: %.3f" % (
+                      self.data_participant[i][0, 2]) + " dtime: %.1f" % (self.data_participant[i][0, 3]) + ' sec')
 
-            print("MOUSE MEAN. Max error: %.2f" % (self.data_participant[i][1, 0]) + "m , Mean error: %.2f" % (
-                self.data_participant[i][1, 1]) + "m , RMSE: %.2f" % (self.data_participant[i][1, 2]))
+            print("MOUSE MEAN. Max error: %.3f" % (self.data_participant[i][1, 0]) + "m , Mean error: %.3f" % (
+                self.data_participant[i][1, 1]) + "m , RMSE: %.3f" % (
+                      self.data_participant[i][1, 2]) + " dtime: %.1f" % (self.data_participant[i][1, 3]) + ' sec')
 
-
+        print(self.data_participant)
 
 if __name__ == '__main__':
     try:
@@ -501,7 +534,7 @@ if __name__ == '__main__':
             node.read_traj_csv_true(i)
             node.read_traj_csv_drawing_all(i)
             node.read_traj_csv_drawing_mouse_all(i)
-            # node.read_traj_dtime(i)
+            node.read_traj_dtime(i)
             node.coordinates_processsing_2d()
             node.get_errors()
             node.plot_all()
