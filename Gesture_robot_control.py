@@ -4,25 +4,6 @@ from std_msgs.msg import String
 import rospy
 from collections import deque
 
-rospy.init_node('gesture', anonymous=True)
-pub_right = rospy.Publisher('/hand_position_right', PoseStamped, queue_size=10)
-data_out_position_left = PoseStamped()
-
-pub_left = rospy.Publisher('/hand_position_left', PoseStamped, queue_size=10)
-data_out_position_right = PoseStamped()
-
-pub_boarders = rospy.Publisher('/hands_boarder', String, queue_size=10)
-data_out_boarders = 'No intersect'
-
-pub_parameters = rospy.Publisher('/hands_parameters', String, queue_size=10)
-data_out_parameters = []
-
-pub_commands_robot = rospy.Publisher('/robot_control', String, queue_size=10)
-
-rate = rospy.Rate(15)  # 10hz
-parameters_points_1 = [1, 0]
-parameters_points_2 = [1, 0]
-# --------------
 
 # buttons position
 center_pos = [(100, 100), (100, 200)]
@@ -33,6 +14,29 @@ button_thickness = 1
 button_thickness_activ = 6
 button_color = [(255, 0, 0), (0, 255, 0)]
 #--------------
+
+
+rospy.init_node('gesture', anonymous=True)
+pub_right = rospy.Publisher('/hand_position_right', PoseStamped, queue_size=10)
+data_out_position_left = PoseStamped()
+
+pub_left = rospy.Publisher('/hand_position_left', PoseStamped, queue_size=10)
+data_out_position_right = PoseStamped()
+
+#pub_boarders = rospy.Publisher('/hands_boarder', String, queue_size=10)
+#data_out_boarders = 'No intersect'
+
+#pub_parameters = rospy.Publisher('/hands_parameters', String, queue_size=10)
+data_out_parameters = []
+
+pub_commands_robot = rospy.Publisher('/robot_control', String, queue_size=10)
+
+rate = rospy.Rate(15)  # 10hz
+parameters_points_1 = [1, 0]
+parameters_points_2 = [1, 0]
+# --------------
+
+
 
 # ---Anabling to draw on the screen by hand---
 draw_line = False
@@ -508,7 +512,7 @@ while True:
 
     frameBig = cv2.resize(frame, (1200, 900))
     # print(data_out_parameters)
-    pub_parameters.publish(str(data_out_parameters))
+    #pub_parameters.publish(str(data_out_parameters))
     cv2.imshow(WINDOW, frame)
 
     key = cv2.waitKey(1)
