@@ -6,13 +6,15 @@ from collections import deque
 
 
 # buttons position
-center_pos = [(100, 100), (100, 200)]
-button_rad = [50, 50]
-but_status = [False, False]
-but_color_status = [False, False]
+center_pos = [(100, 100), (100, 200), (200, 200)]
+button_rad = [50, 50, 50]
+but_status = [False, False, False]
+but_color_status = [False, False, False]
 button_thickness = 1
 button_thickness_activ = 6
 button_color = [(255, 0, 0), (0, 255, 0)]
+show_buttons = True
+show_hand = False
 #--------------
 
 
@@ -373,39 +375,44 @@ while True:
         if hand == 'right':
             hand2 = 'left'
 
-        for point in points:
-            x, y = point
-            cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
-        for connection in connections:
-            x0, y0 = points[connection[0]]
-            x1, y1 = points[connection[1]]
-            cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
-
         sign_coords = points.flatten() / float(frame.shape[0]) - 0.5
         sign_class = sign_classifier.predict(np.expand_dims(sign_coords, axis=0))
         sign_text = SIGNS[sign_class.argmax()]
-        wrist_x = int(points[0][0])
-        wrist_y = int(points[0][1])
 
-        cv2.putText(frame, sign_text + ":" + hand, (wrist_x - 20, wrist_y + 10), cv2.FONT_HERSHEY_SIMPLEX, 1,
-                    (255, 0, 0), 2)
+        if show_hand:
+            for point in points:
+                x, y = point
+                cv2.circle(frame, (int(x), int(y)), THICKNESS * 2, POINT_COLOR, THICKNESS)
+            for connection in connections:
+                x0, y0 = points[connection[0]]
+                x1, y1 = points[connection[1]]
+                cv2.line(frame, (int(x0), int(y0)), (int(x1), int(y1)), CONNECTION_COLOR, THICKNESS)
+            wrist_x = int(points[0][0])
+            wrist_y = int(points[0][1])
+
+            cv2.putText(frame, sign_text + ":" + hand, (wrist_x - 20, wrist_y + 10), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                        (255, 0, 0), 2)
+
+
+
         gesture_ml = int(SIGNS_dict[sign_text])
         position = get_positon_hand(points)
 
-        # #---average running---
-        # collecter_x.rotate(1)
-        # collecter_y.rotate(1)
-        # collecter_z.rotate(1)
-        #
-        # collecter_x[0], collecter_y[0], collecter_z[0] = position[0], position[1], position[2]
-        # position_average = (sum(collecter_x)/size, sum(collecter_y)/size, sum(collecter_z)/size)
-        # #print(position_average)
-        #
-        # position = position_average
-        # position_new = get_positon_hand(points)
-        # print(position)
 
-        cv2.circle(frame, (int(position[0]), int(position[1])), THICKNESS * 2, (0, 0, 255), 5)
+            # #---average running---
+            # collecter_x.rotate(1)
+            # collecter_y.rotate(1)
+            # collecter_z.rotate(1)
+            #
+            # collecter_x[0], collecter_y[0], collecter_z[0] = position[0], position[1], position[2]
+            # position_average = (sum(collecter_x)/size, sum(collecter_y)/size, sum(collecter_z)/size)
+            # #print(position_average)
+            #
+            # position = position_average
+            # position_new = get_positon_hand(points)
+        #print(position)
+
+        #cv2.circle(frame, (int(position[0]), int(position[1])), THICKNESS * 2, (0, 0, 255), 5)
 
         if gesture_ml == 5 or gesture_ml == 4:
             param_r_1 = get_hand_parameter_1(points)
@@ -479,8 +486,8 @@ while True:
         # print(collected_gesture, average, identical)
 
         current_gesture_right = gesture_ml
-        if (current_gesture_right != previous_gesture_right) and identical:
-            print('previous:', previous_gesture_right, ', current:', current_gesture_right)
+        # if (current_gesture_right != previous_gesture_right) and identical:
+        #     print('previous:', previous_gesture_right, ', current:', current_gesture_right)
 
             ### OPTION1
             # if (previous_gesture_right == 5) and (current_gesture_right == 1):
@@ -495,20 +502,30 @@ while True:
         if (current_gesture_right == 1):
             for i in range(len(center_pos)):
                 dist = get_distance(points[8], center_pos[i])
+                send = False
                 if button_rad[i] > dist:
+                    if but_color_status[i] == False:
+                        print(i+1)
+                        pub_commands_robot.publish(str(i+1))
                     but_color_status[i] = True
                 else:
                     but_color_status[i] = False
 
+
         if (current_gesture_right == 5):
             for i in range(len(center_pos)):
+                if but_color_status[i] == True:
+                    pub_commands_robot.publish(str(-1))
+                    print(-1)
                 but_color_status[i] = False
+                send = False
 
             previous_gesture_right = current_gesture_right
         ####-------------------------
 
 
-    draw_buttons(frame)
+    if show_buttons:
+        draw_buttons(frame)
 
     frameBig = cv2.resize(frame, (1200, 900))
     # print(data_out_parameters)
